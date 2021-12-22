@@ -1,0 +1,24 @@
+0.000	Silence
+1.150	Exposition, pt, FugueExposition
+23.995  Episode1
+29.945  MiddleEntry1
+37.545  Episode2
+48.645  MiddleEntry2
+56.495  Episode3, transition
+100.195 MiddleEntry3, st
+119.161 Episode4, ct
+142.011 Development, sec1
+172.811 sec2
+199.611 sec3
+212.411 retransition, part1
+231.761 retransition, part2
+250.761 Recapitulation, pt, FugueExposition'
+264.211 Episode1
+270.761 MiddleEntry1
+278.761 Episode2
+287.761 MiddleEntry2, part1
+299.911 MiddleEntry2, part2
+306.511 Episode3, transition, domProlongation
+331.761 CODA, FinalEntry
+343.861 TrueCODA
+368.000	End

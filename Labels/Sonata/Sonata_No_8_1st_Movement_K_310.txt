@@ -1,0 +1,30 @@
+0.000	Silence
+1.030	Exposition, pt
+7.670	transition
+43.080	st1
+66.240	st2
+76.360	Codetta
+86.230	ct
+96.350	Exposition
+103.130	transition
+138.830	st1
+163.300	st2
+173.010	codetta
+182.800	ct
+192.400	Development
+240.610	domProlongation
+250.960	Recapitulation, pt
+266.790	transition
+296.810	st1
+321.340	st2
+346.210	ct
+348.590	codetta
+356.470	Development
+403.450	domProlongation
+414.840	Recapitulation, pt
+430.360	transition
+460.970	st1
+485.460	st2
+507.310	ct
+509.880 codetta
+518.000	End

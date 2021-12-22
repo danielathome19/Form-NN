@@ -1,0 +1,22 @@
+0.000	Silence
+1.360	Exposition, pt, a
+7.350	transition, b
+24.080	st, c
+31.020	d
+50.150	Exposition, pt, a
+57.690	b, transition
+73.840	st, c
+80.850	d
+100.900	Development, e
+108.600	e'
+125.640	Recapitulation, pt, a
+132.260	transition, b
+154.950	st, c
+162.310	d
+182.540	Development, e
+189.910	e'
+206.860	Recapitulation, pt, a
+213.560	transition, b
+236.260	st, c
+243.660	d
+262.000	End

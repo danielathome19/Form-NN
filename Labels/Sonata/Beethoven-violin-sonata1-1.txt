@@ -1,0 +1,27 @@
+0.000	Silence
+1.580	Exposition, pt1
+20.660	pt2
+33.650	transition, part1
+43.340	transition, part2
+82.400	bridge
+93.480	st1
+121.150	st2
+140.400	ct
+164.550	Exposition, pt1
+184.230	pt2
+197.300	transition, part1
+206.900	transition, part2
+245.880	bridge
+284.490	st1
+303.590	st2
+328.160	ct
+335.780	Development, sec1
+367.230	sec2
+386.740	sec3
+406.320	Recapitulation, pt1
+417.830	transition, part2
+448.360	bridge
+460.160	st1
+487.690	st2
+507.380	ct
+524.000	End

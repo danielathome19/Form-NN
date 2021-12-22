@@ -1,0 +1,26 @@
+0.000	Silence
+1.030	Theme, a
+11.140	Theme, b
+22.850	Theme, a'
+32.300	Theme, b
+45.120	Theme, c
+59.900	Theme, a'
+70.320	Theme, b'
+82.760	Variation1, ornamental
+164.250	Variation2, melodic
+243.590	Variation3, characteristic
+367.830	Variation4, characteristic
+419.130	Variation5, ornamental, figural
+483.960	Variation6, simplifying, characteristic
+553.030	Variation7, ornamental, figural
+622.350	Variation8, var1, characteristic
+656.960	Variation8, var2, characteristic, figural
+676.080	Variation8, var3, melodic
+691.340	Variation8, var4, ornamental
+698.680	Variation8, var5, simplifying
+716.220	Variation8, var6, figural
+741.430	Variation8, var7, melodic
+770.120	Variation8, var8, melodic
+787.780	Variation8, var9, simplifying, Theme
+806.050	Variation8, var10, ornamental
+827.000	End

@@ -1,0 +1,10 @@
+0.000	Silence
+1.030	Exposition
+27.570	Episode1
+38.170	MiddleEntry1
+42.900	Episode2
+49.850	MiddleEntry2
+55.810	Bridge
+67.080	Episode3
+92.530	FinalEntry
+102.000	End

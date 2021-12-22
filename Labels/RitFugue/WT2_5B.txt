@@ -1,0 +1,14 @@
+0.000	Silence
+1.360	Exposition
+21.630	Episode1
+28.650	MiddleEntry1
+46.480	Episode2
+59.860	MiddleEntry2, Exposition2
+86.780	Episode3
+97.160	MiddleEntry3
+103.500	Episode4
+117.010	MiddleEntry4
+122.900	Episode5
+127.740	FinalEntry
+138.220	Episode6
+148.000	End
