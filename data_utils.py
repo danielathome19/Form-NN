@@ -114,7 +114,7 @@ def create_mls_sslm(filename, name="", foldername="", filepath=DEFAULT_FILEPATH)
     # Plot MLS
     plt.figure(figsize=(10, 4))
     plt.title("Mel Spectrogram")
-    fig = plt.imshow(S_to_dB, origin='lower', cmap='viridis', aspect=20)
+    fig = plt.imshow(S_to_dB, origin='lower', cmap='plasma', aspect=20)
     plt.colorbar(fig, fraction=0.0115, pad=0.05)
     plt.show()
     print("MLS dimensions are: [mel bands, N]")

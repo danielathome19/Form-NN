@@ -135,10 +135,11 @@ def sslm_gen(spectrogram, pooling_factor, lag, mode, feature):
             if np.isnan(sslm[i, j]):
                 sslm[i, j] = 0
 
-    if mode == "euc":
-        return sslm, x_prime
+    # if mode == "euc":
+    #     return sslm, x_prime
 
-    return sslm
+    # return sslm
+    return sslm, x_prime
 
 
 def ssm_gen(spectrogram, pooling_factor):
