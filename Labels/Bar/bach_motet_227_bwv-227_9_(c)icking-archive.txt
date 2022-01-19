@@ -1,2 +1,3 @@
+Bar
 0.000	Silence
 210.000	End

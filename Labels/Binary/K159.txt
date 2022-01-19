@@ -1,2 +1,3 @@
+Binary
 0.000	Silence
 83.000	End

@@ -1,2 +1,3 @@
+Ternary
 0.000	Silence
 1139.000	End

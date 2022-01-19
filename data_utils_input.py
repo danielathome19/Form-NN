@@ -284,7 +284,7 @@ def gaussian(x, mu, sig):
     return np.exp(-np.power((x - mu) / sig, 2.) / 2)
 
 
-def borders(image, label, labels_sec):
+def borders(image, label, labels_sec, label_form):
     """This function transforms labels in sc to gaussians in frames"""
     pooling_factor = 6
     num_frames = image.shape[2]
@@ -309,11 +309,12 @@ def borders(image, label, labels_sec):
     for i in range(len(gauss_array)):
         if gauss_array[i] > 1:
             gauss_array[i] = 1
-    return image, gauss_array, labels_sec
+    return image, gauss_array, labels_sec, label_form
+    # return image, label, gauss_array, label_form
 
 
-def padding_MLS(image, label, labels_sec):
-    return image, label, labels_sec  # TODO: REMOVE
+def padding_MLS(image, label, labels_sec, label_form):
+    return image, label, labels_sec, label_form  # TODO: REMOVE
     """This function pads 30frames at the begining and end of an image"""
     sr = sr_desired
     padding_factor = 50
@@ -353,10 +354,10 @@ def padding_MLS(image, label, labels_sec):
     # Pad MLS
     S_padded = np.concatenate((pad_image, image), axis=-1)
     S_padded = np.concatenate((S_padded, pad_image), axis=-1)
-    return S_padded, label, labels_sec
+    return S_padded, label, labels_sec, label_form
 
 
-def padding_SSLM(image, label, labels_sec):
+def padding_SSLM(image, label, labels_sec, label_form):
     """This function pads 30 frames at the begining and end of an image"""
     padding_factor = 50
 
@@ -365,10 +366,10 @@ def padding_SSLM(image, label, labels_sec):
     pad_image = pad_image[np.newaxis, :, :]
     S_padded = np.concatenate((pad_image, image), axis=-1)
     S_padded = np.concatenate((S_padded, pad_image), axis=-1)
-    return S_padded, label, labels_sec
+    return S_padded, label, labels_sec, label_form
 
 
-def normalize_image(image, label, labels_sec):
+def normalize_image(image, label, labels_sec, label_form):
     """This function normalizes an image"""
     image = np.squeeze(image)  # remove
 
@@ -382,7 +383,7 @@ def normalize_image(image, label, labels_sec):
     image = normalize(image)
     # image = (image-np.min(image))/(np.max(image)-np.min(image))
     image = np.expand_dims(image, axis=0)
-    return image, label, labels_sec
+    return image, label, labels_sec, label_form
 
 
 """
@@ -418,6 +419,7 @@ class BuildDataloader(k.utils.Sequence):
         self.images_list = []
         self.labels_list = []
         self.labels_sec_list = []
+        self.labels_form_list = []
         self.batch_size = batch_size
         self.n = 0
         self.max = self.__len__()
@@ -427,12 +429,12 @@ class BuildDataloader(k.utils.Sequence):
         for (im_dirpath, im_dirnames, im_filenames) in os.walk(self.images_path):  # images files of images path
             for f in im_filenames:  # loop in each images png name files (songs_IDs)
                 if f.endswith('.npy'):
-                    print("Reading file #" + str(cnt))
+                    # print("Reading file #" + str(cnt))
                     img_path = im_dirpath + f
-                    image = np.load(img_path)  # plt.imread si queremos abrir imagen
+                    image = np.load(img_path)  # plt.imread if we want to open image
                     self.images_list.append(image)
                     cnt += 1
-                    if cnt == 30:  # TODO: REMOVE
+                    if cnt == 31:  # TODO: REMOVE
                         break
             """ 
             for (lab_dirpath, lab_dirnames, lab_filenames) in os.walk(self.labels_path):  # labels files fo labels path
@@ -441,7 +443,7 @@ class BuildDataloader(k.utils.Sequence):
                         # images path
                         if f.endswith('.npy'):
                             img_path = im_dirpath + f
-                            image = np.load(img_path)  # plt.imread si queremos abrir imagen
+                            image = np.load(img_path)  # plt.imread if we want to open image
                             self.images_list.append(image)
                             print("appended image")
                         # ""
@@ -462,9 +464,10 @@ class BuildDataloader(k.utils.Sequence):
                         self.labels_list.append(lbls_phrases)
                         self.labels_sec_list.append(lbls_seconds)
             """
-        lbls_seconds, lbls_phrases = du.ReadLabelSecondsPhrasesFromFolder()
+        lbls_seconds, lbls_phrases, lbl_forms = du.ReadLabelSecondsPhrasesFromFolder(lblpath=labels_path, stop=cnt)
         self.labels_list = lbls_phrases
         self.labels_sec_list = lbls_seconds
+        self.labels_form_list = lbl_forms
         self.transforms = transforms
 
     # [proc.open_files() for proc in psutil.process_iter() if proc.pid == os.getpid()]
@@ -474,18 +477,24 @@ class BuildDataloader(k.utils.Sequence):
 
     def __getitem__(self, index):
         """take song from list"""
-        # TODO: DEL print("LEN: " + str(self.max) + " TRU LEN: " + str(len(self.images_list)) + " INDX: " + str(index))
+        # print("LEN: " + str(self.max) + " TRU LEN: " + str(len(self.images_list)) + " INDX: " + str(index))
         image = self.images_list[index]
+        # print(image.shape, image.ndim)
+        # print(image)
+        # if image.ndim == 1:
+        #     print(image)
         image = image[np.newaxis, :, :]
         labels = self.labels_list[index]
+        # print("Labels: ", str(len(labels)), "Images: ", str(len(image)), image.shape)
         labels_sec = self.labels_sec_list[index]
+        labels_form = self.labels_form_list[index]
         # From numpy to Torch Tensors
         # image = torch.from_numpy(image)
         # label = torch.from_numpy(label)
         if self.transforms is not None:
             for t in self.transforms:
-                image, labels, labels_sec = t(image, labels, labels_sec)
-        return image, [labels, labels_sec]
+                image, labels, labels_sec, labels_form = t(image, labels, labels_sec, labels_form)
+        return image, [labels, labels_sec, labels_form]
 
     def __next__(self):
         if self.n >= self.max:
@@ -493,11 +502,3 @@ class BuildDataloader(k.utils.Sequence):
         result = self.__getitem__(self.n)
         self.n += 1
         return result
-
-
-"""
-def build_dataloader(batch_size, input_path, shuffle=False):
-    dataset = BuildDataloader(input_path, DEFAULT_LABELPATH, transforms=[normalize_image, padding_MLS, borders])
-    loader = DataLoader(dataset, batch_size=batch_size, num_workers=0, shuffle=shuffle)
-    return dataset, loader
-"""

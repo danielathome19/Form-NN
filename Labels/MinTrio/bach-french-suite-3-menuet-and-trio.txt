@@ -1,2 +1,3 @@
+MinTrio
 0.000	Silence
 171.000	End

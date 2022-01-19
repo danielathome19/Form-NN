@@ -1,3 +1,4 @@
+MinTrio
 0.000	Silence
 1.360	A, a
 16.030	a'

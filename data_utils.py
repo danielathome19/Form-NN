@@ -58,6 +58,9 @@ import math
 from scipy import signal
 import numpy as np
 from os import listdir, walk, getcwd, sep
+from numpy import argmax
+from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import OneHotEncoder
 
 MASTER_DIR = 'D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis/'
 
@@ -90,7 +93,7 @@ def create_spectrogram(filename, name, filepath=DEFAULT_FILEPATH):
     del filename, name, clip, sample_rate, fig, ax, S
 
 
-# CREATE MLS AND SSLM (MFCC) GRAPHS
+# CREATE MLS AND SSLM (MFCC) GRAPHS (depricated)
 def create_mls_sslm(filename, name="", foldername="", filepath=DEFAULT_FILEPATH):
     """====================Parameters===================="""
     window_size = 2048  # (samples/frame)
@@ -366,7 +369,7 @@ def create_mls_sslm(filename, name="", foldername="", filepath=DEFAULT_FILEPATH)
     return
 
 
-# CREATE CHROMA GRAPHS
+# CREATE CHROMA GRAPHS (depricated)
 def create_mls_sslm2(filename, name="", foldername="", filepath=DEFAULT_FILEPATH):
     # ------------PARAMETERS--------------
     window_size = 0.209  # sec/frame
@@ -700,19 +703,6 @@ def ReadLabelsFromLine(line):
     return labels
 
 
-def ReadDataFromtxt(directory, archive):
-    numbers = []
-    labels = []
-    for _ in listdir(directory):
-        file = open(directory + archive, "r")
-
-        for line in file:
-            numbers.append(ReadNumbersFromLine(line))
-            labels.append(ReadLabelsFromLine(line.rstrip()))
-        file.close()
-    return numbers, labels
-
-
 def ReadImagesFromFolder(directory):
     imgs = []
     for (img_dir_path, img_dnames, img_fnames) in os.walk(directory):
@@ -724,13 +714,56 @@ def ReadImagesFromFolder(directory):
     return imgs
 
 
-def ReadLabelSecondsPhrasesFromFolder():
+def ReadDataFromtxt(directory, archive):
+    numbers = []
+    labels = []
+    cnt = 1
+    # for _ in listdir(directory):
+    cnt += 1
+    file = open(directory + archive, "r")
+    form = next(file).strip()
+    for line in file:
+        numbers.append(ReadNumbersFromLine(line))
+        labels.append(ReadLabelsFromLine(line.rstrip()))
+    file.close()
+    return numbers, labels, form
+
+
+def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1):
     nums = []
     lbls = []
-    for (lbl_dir_path, lbl_dnames, lbl_fnames) in os.walk(DEFAULT_LABELPATH):
+    forms = []
+    for (lbl_dir_path, lbl_dnames, lbl_fnames) in os.walk(lblpath):
         for f in lbl_fnames:
-            numsIn, lblsIn = ReadDataFromtxt(lbl_dir_path + '/', f)
+            if stop != -1:
+                stop -= 1
+                if stop == 0:
+                    break
+            # prepend_line(lbl_dir_path + '/' + f, lbl_dir_path.split('/')[-1])  # Run once for master label set
+            numsIn, lblsIn, formsIn = ReadDataFromtxt(lbl_dir_path + '/', f)
             numsIn = np.array(numsIn, dtype=np.float32)
             nums.append(numsIn)
             lbls.append(lblsIn)
-    return nums, lbls
+            forms.append([formsIn])
+
+    # Convert Forms to One Hot encoding
+    values = np.array(forms)  # print(values)
+    label_encoder = LabelEncoder()
+    integer_encoded = label_encoder.fit_transform(values)  # print(integer_encoded)
+    onehot_encoder = OneHotEncoder(sparse=False)
+    integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
+    onehot_encoded = onehot_encoder.fit_transform(integer_encoded)  # print(onehot_encoded)
+    # inverted = label_encoder.inverse_transform([argmax(onehot_encoded[0, :])])  # Return original label from encoding
+    return nums, lbls, onehot_encoded
+
+
+def prepend_line(file_name, line):
+    """Insert string as a new line at the beginning of a file"""
+    dummy_file = file_name + '.bak'
+    with open(file_name, 'r') as read_obj, open(dummy_file, 'w') as write_obj:
+        write_obj.write(line + '\n')
+        for line in read_obj:
+            write_obj.write(line)
+    os.remove(file_name)
+    os.rename(dummy_file, file_name)
+    print("Finished prepending to " + file_name)
