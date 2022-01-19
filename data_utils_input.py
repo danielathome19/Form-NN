@@ -310,11 +310,10 @@ def borders(image, label, labels_sec, label_form):
         if gauss_array[i] > 1:
             gauss_array[i] = 1
     return image, gauss_array, labels_sec, label_form
-    # return image, label, gauss_array, label_form
+    # return image, label, gauss_array, label_form  # TODO: fix?
 
 
 def padding_MLS(image, label, labels_sec, label_form):
-    return image, label, labels_sec, label_form  # TODO: REMOVE
     """This function pads 30frames at the begining and end of an image"""
     sr = sr_desired
     padding_factor = 50
@@ -345,8 +344,9 @@ def padding_MLS(image, label, labels_sec, label_form):
 
         return total.values
 
+    n_mels = image.shape[1]  # 80
     y = voss(padding_factor * hop_length - 1)
-    S = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=window_size, hop_length=hop_length, n_mels=80, fmin=80,
+    S = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=window_size, hop_length=hop_length, n_mels=n_mels, fmin=80,
                                        fmax=16000)
     S_to_dB = librosa.power_to_db(S, ref=np.max)
     pad_image = S_to_dB[np.newaxis, :, :]
