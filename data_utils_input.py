@@ -309,8 +309,8 @@ def borders(image, label, labels_sec, label_form):
     for i in range(len(gauss_array)):
         if gauss_array[i] > 1:
             gauss_array[i] = 1
-    return image, gauss_array, labels_sec, label_form
-    # return image, label, gauss_array, label_form  # TODO: fix?
+    # return image, gauss_array, labels_sec, label_form
+    return image, label, gauss_array, label_form
 
 
 def padding_MLS(image, label, labels_sec, label_form):
@@ -344,10 +344,10 @@ def padding_MLS(image, label, labels_sec, label_form):
 
         return total.values
 
-    n_mels = image.shape[1]  # 80
+    n_mels = image.shape[1]  # Default(80) - fit padding to image height
     y = voss(padding_factor * hop_length - 1)
-    S = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=window_size, hop_length=hop_length, n_mels=n_mels, fmin=80,
-                                       fmax=16000)
+    S = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=window_size, hop_length=hop_length,
+                                       n_mels=n_mels, fmin=80, fmax=16000)
     S_to_dB = librosa.power_to_db(S, ref=np.max)
     pad_image = S_to_dB[np.newaxis, :, :]
 
@@ -384,29 +384,6 @@ def normalize_image(image, label, labels_sec, label_form):
     # image = (image-np.min(image))/(np.max(image)-np.min(image))
     image = np.expand_dims(image, axis=0)
     return image, label, labels_sec, label_form
-
-
-"""
-class DataGenerator(k.utils.Sequence):
-    "Convert PyTorch dataloader to Tensorflow generator"
-    def __init__(self, gen, ncl):
-        self.gen = gen
-        self.iter = iter(gen)
-        self.ncl = ncl
-
-    def __getitem__(self, _):
-        try:
-            ims, lbs = next(self.iter)
-        except StopIteration:
-            self.iter = iter(self.gen)
-            ims, lbs = next(self.iter)
-        ims = np.swapaxes(np.swapaxes(ims.numpy(), 1, 3), 1, 2)
-        lbs = np.eye(self.ncl)[lbs].reshape(self.gen.batch_size, self.ncl)
-        return ims, lbs
-
-    def __len__(self):
-        return len(self.gen)
-"""
 
 
 class BuildDataloader(k.utils.Sequence):
@@ -494,7 +471,7 @@ class BuildDataloader(k.utils.Sequence):
         if self.transforms is not None:
             for t in self.transforms:
                 image, labels, labels_sec, labels_form = t(image, labels, labels_sec, labels_form)
-        return image, [labels, labels_sec, labels_form]
+        return image, [labels_sec, labels_form]  # [labels, labels_sec, labels_form]
 
     def __next__(self):
         if self.n >= self.max:

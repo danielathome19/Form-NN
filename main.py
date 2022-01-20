@@ -528,6 +528,7 @@ def trainModel():
     sslm_mfeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_EUC/'), labels_path=TRAIN_LABELPATH,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
 
+    # """
     mls_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'MLS/'), labels_path=TRAIN2_LABELPATH,
                                      transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
     sslm_cmcos_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_CRM_COS/'), labels_path=TRAIN2_LABELPATH,
@@ -538,8 +539,8 @@ def trainModel():
                                             transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
     sslm_mfeuc_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_MFCC_EUC/'), labels_path=TRAIN2_LABELPATH,
                                             transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
+    """
 
-    # """
     mls_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'MLS/'), labels_path=VAL_LABELPATH,
                                   transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
     sslm_cmcos_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'SSLM_CRM_COS/'), labels_path=VAL_LABELPATH,
@@ -551,7 +552,7 @@ def trainModel():
     sslm_mfeuc_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'SSLM_MFCC_EUC/'), labels_path=VAL_LABELPATH,
                                          transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
 
-    """
+    "" "
     mls_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'MLS/'), labels_path=TEST_LABELPATH,
                                    transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
     sslm_cmcos_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'SSLM_CRM_COS/'), labels_path=TEST_LABELPATH,
@@ -590,7 +591,7 @@ def trainModel():
     # test_datagen = multi_input_generator2(mls_test, sslm_cmcos_test, sslm_cmeuc_test, sslm_mfcos_test, sslm_mfeuc_test
 
     steps_per_epoch = len(list(mls_train)) // batch_size
-    steps_per_valid = len(list(mls_val)) // batch_size
+    steps_per_valid = len(list(mls_train2)) // batch_size  # mls_val
 
     trmodel = formnn_fuse(output_channels=32, lrval=0.00001)
     # , lrval=.009999999776482582)(32) CNN Layer 1 Output Characteristic Maps                'val_loss' or val_accuracy
@@ -600,6 +601,18 @@ def trainModel():
                                 shuffle=False, callbacks=[checkpoint], batch_size=batch_size,
                                 steps_per_epoch=steps_per_epoch, validation_steps=steps_per_valid)
 
+    print("Training complete!\n")
+
+    plt.plot(model_history.history['loss'])
+    plt.plot(model_history.history['val_loss'])
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['train', 'test'], loc='upper left')
+    plt.savefig('Initial_Model_Loss.png')
+    plt.show()
+
+    """
     # print(model_history.history.keys())
     #   dict_keys(['loss', 'precision', 'recall', 'val_loss', 'val_precision', 'val_recall'])
     # PLOT MODEL HISTORY OF ACCURACY AND LOSS OVER EPOCHS
@@ -613,17 +626,7 @@ def trainModel():
     plt.show()
     # pd.DataFrame(model_history.history).plot()  # figsize=(8, 5)
     # plt.show()
-
-    plt.plot(model_history.history['loss'])
-    plt.plot(model_history.history['val_loss'])
-    plt.title('Model Loss')
-    plt.ylabel('Loss')
-    plt.xlabel('Epoch')
-    plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig('Initial_Model_Loss.png')
-    plt.show()
-
-    """
+    
     plt.plot(model_history.history['precision'])
     plt.plot(model_history.history['val_precision'])
     plt.title('Model Precision')
@@ -642,6 +645,16 @@ def trainModel():
     plt.savefig('Initial_Model_Recall.png')
     plt.show()
     """
+
+    print("Running prediction...")
+    prediction = trmodel.predict_generator(train_datagen, steps=len(list(mls_train)), verbose=1)
+    print(prediction)
+    # plt.plot(prediction)
+    # plt.show()
+    # y_pred = trmodel.predict(x_test, batch_size=batch_size, verbose=1)
+    # y_pred_bool = np.argmax(y_pred, axis=1)
+    # print(classification_report(y_test, y_pred_bool))
+    print("Prediction complete!")
 
 
 if __name__ == '__main__':
