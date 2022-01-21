@@ -303,14 +303,12 @@ def borders(image, label, labels_sec, label_form):
     new_vector = (vector * hop_length + window_size / 2) / sr
     sigma = 0.1
     gauss_array = []
-    for mu in (label_padded[1:]):
-        np.append(gauss_array, gaussian(new_vector, mu, sigma))
-        # gauss_array += gaussian(new_vector, mu, sigma)
+    for mu in (label_padded[1:]):  # Ignore first label (beginning of song) due to insignificance
+        gauss_array = np.append(gauss_array, gaussian(new_vector, mu, sigma))
     for i in range(len(gauss_array)):
         if gauss_array[i] > 1:
             gauss_array[i] = 1
-    # return image, gauss_array, labels_sec, label_form
-    return image, label, gauss_array, label_form
+    return image, label[1:], gauss_array, label_form
 
 
 def padding_MLS(image, label, labels_sec, label_form):
@@ -471,7 +469,8 @@ class BuildDataloader(k.utils.Sequence):
         if self.transforms is not None:
             for t in self.transforms:
                 image, labels, labels_sec, labels_form = t(image, labels, labels_sec, labels_form)
-        return image, [labels_sec, labels_form]  # [labels, labels_sec, labels_form]
+        # return image, [labels_sec, labels_form]  # [labels, labels_sec, labels_form]
+        return image, labels_form
 
     def __next__(self):
         if self.n >= self.max:

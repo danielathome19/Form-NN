@@ -96,7 +96,7 @@ TEST_DIR = os.path.join(MASTER_INPUT_DIR, 'Test/')
 VAL_DIR = os.path.join(MASTER_INPUT_DIR, 'Validate/')
 
 TRAIN_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/Train/')
-TRAIN2_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/Train/')
+TRAIN2_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/Train2/')
 TEST_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/Test/')
 VAL_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/Validate/')
 # endregion
@@ -514,7 +514,7 @@ def formnn_fuse(output_channels=32, lrval=0.0001):
 
 
 def trainModel():
-    batch_size = 3
+    batch_size = 1
 
     # region MODEL_DIRECTORIES
     mls_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'MLS/'), labels_path=TRAIN_LABELPATH,
@@ -566,29 +566,29 @@ def trainModel():
     """
     # endregion
 
-    def multi_input_generator1(gen1, gen2, gen3, gen4):
+    def multi_input_generator_helper(gen1, gen2, gen3, gen4):
         while True:
             yield tf.expand_dims(np.concatenate((next(gen1)[0],
                                                  np.concatenate((next(gen2)[0],
                                                                  np.concatenate((next(gen3)[0], next(gen4)[0]),
                                                                                 axis=-1)), axis=-1)), axis=-1), axis=-1)
 
-    def multi_input_generator2(gen1, gen2, gen3, gen4, gen5, stop=-1):
+    def multi_input_generator(gen1, gen2, gen3, gen4, gen5, stop=-1):
         while True:
-            if stop != -1:
+            if stop != -1:  # TODO: remove condition
                 stop -= 1
                 if stop == 0:
                     break
             tpl = next(gen1)  # keras.utils.to_categorical(tpl[1])
             # yield [tf.expand_dims(tpl[0], axis=-1), tf.expand_dims(next(gen2)[0], axis=-1)], tpl[1]
-            yield [tf.expand_dims(tpl[0], axis=-1), next(multi_input_generator1(gen2, gen3, gen4, gen5))], tpl[1]
+            yield [tf.expand_dims(tpl[0], axis=-1), next(multi_input_generator_helper(gen2, gen3, gen4, gen5))], tpl[1]
 
-    train_datagen = multi_input_generator2(mls_train, sslm_cmcos_train, sslm_cmeuc_train, sslm_mfcos_train,
-                                           sslm_mfeuc_train)
-    valid_datagen = multi_input_generator2(mls_train2, sslm_cmcos_train2, sslm_cmeuc_train2, sslm_mfcos_train2,
-                                           sslm_mfeuc_train2)  # , stop=13)
-    # valid_datagen = multi_input_generator2(mls_val, sslm_cmcos_val, sslm_cmeuc_val, sslm_mfcos_val, sslm_mfeuc_val)
-    # test_datagen = multi_input_generator2(mls_test, sslm_cmcos_test, sslm_cmeuc_test, sslm_mfcos_test, sslm_mfeuc_test
+    train_datagen = multi_input_generator(mls_train, sslm_cmcos_train, sslm_cmeuc_train, sslm_mfcos_train,
+                                          sslm_mfeuc_train)
+    valid_datagen = multi_input_generator(mls_train2, sslm_cmcos_train2, sslm_cmeuc_train2, sslm_mfcos_train2,
+                                          sslm_mfeuc_train2)  # , stop=13)
+    # valid_datagen = multi_input_generator(mls_val, sslm_cmcos_val, sslm_cmeuc_val, sslm_mfcos_val, sslm_mfeuc_val)
+    # test_datagen = multi_input_generator(mls_test, sslm_cmcos_test, sslm_cmeuc_test, sslm_mfcos_test, sslm_mfeuc_test
 
     steps_per_epoch = len(list(mls_train)) // batch_size
     steps_per_valid = len(list(mls_train2)) // batch_size  # mls_val
@@ -647,14 +647,24 @@ def trainModel():
     """
 
     print("Running prediction...")
-    prediction = trmodel.predict_generator(train_datagen, steps=len(list(mls_train)), verbose=1)
-    print(prediction)
+    predictions = trmodel.predict_generator(train_datagen, steps=1, verbose=1)
+    print(predictions)
+    print("Prediction complete!")
+
+    label_encoder = LabelEncoder()
+    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
+    inverted = label_encoder.inverse_transform([np.argmax(predictions[0, :])])
+    print(inverted)
+
+    """
     # plt.plot(prediction)
     # plt.show()
     # y_pred = trmodel.predict(x_test, batch_size=batch_size, verbose=1)
     # y_pred_bool = np.argmax(y_pred, axis=1)
     # print(classification_report(y_test, y_pred_bool))
-    print("Prediction complete!")
+    """
+
+    # TODO: create a dense model (RNN?) that uses the audio data to classify the peaks
 
 
 if __name__ == '__main__':

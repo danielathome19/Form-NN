@@ -69,7 +69,8 @@ DEFAULT_FILEPATH = os.path.join(MASTER_DIR, 'Images/Train/')
 DEFAULT_LABELPATH = os.path.join(MASTER_DIR, 'Labels/')
 
 
-# LOG-SCALED MEL SPECTROGRAM (depricated)
+# region DEPRECATED
+# LOG-SCALED MEL SPECTROGRAM (deprecated)
 def create_spectrogram(filename, name, filepath=DEFAULT_FILEPATH):
     plt.interactive(False)
     clip, sample_rate = librosa.load(filename, sr=None)
@@ -93,7 +94,7 @@ def create_spectrogram(filename, name, filepath=DEFAULT_FILEPATH):
     del filename, name, clip, sample_rate, fig, ax, S
 
 
-# CREATE MLS AND SSLM (MFCC) GRAPHS (depricated)
+# CREATE MLS AND SSLM (MFCC) GRAPHS (deprecated)
 def create_mls_sslm(filename, name="", foldername="", filepath=DEFAULT_FILEPATH):
     """====================Parameters===================="""
     window_size = 2048  # (samples/frame)
@@ -369,7 +370,7 @@ def create_mls_sslm(filename, name="", foldername="", filepath=DEFAULT_FILEPATH)
     return
 
 
-# CREATE CHROMA GRAPHS (depricated)
+# CREATE CHROMA GRAPHS (deprecated)
 def create_mls_sslm2(filename, name="", foldername="", filepath=DEFAULT_FILEPATH):
     # ------------PARAMETERS--------------
     window_size = 0.209  # sec/frame
@@ -676,8 +677,8 @@ def create_mls_sslm2(filename, name="", foldername="", filepath=DEFAULT_FILEPATH
         timeStr = str(datetime.timedelta(seconds=timeSecondsDecimal))
         gtTimeStr = 0
         timeDifference = 0
-        if i < len(array):  #TODO: REMOVE why?
-            gtTimeStr = str(datetime.timedelta(seconds=array[i]))  #TODO: REMOVE why?
+        if i < len(array):  # Demonstration only
+            gtTimeStr = str(datetime.timedelta(seconds=array[i]))
             timeDifference = array[i] - timeSecondsDecimal
         print(f"Event: {timeStr}\t\t{dbltb if i == 0 else nspc}Ground Truth: {gtTimeStr}\t\t{dbltb if i == 0 else nspc}"
               f"Difference: "
@@ -688,6 +689,8 @@ def create_mls_sslm2(filename, name="", foldername="", filepath=DEFAULT_FILEPATH
     plt.plot(frames, c_norm)
     plt.show()
     print("\nAverage (absolute) time difference: ±" + str(np.average(timeDifs)))
+
+# endregion
 
 
 def ReadNumbersFromLine(line):
@@ -749,11 +752,26 @@ def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1):
     # Convert Forms to One Hot encoding
     values = np.array(forms)  # print(values)
     label_encoder = LabelEncoder()
-    integer_encoded = label_encoder.fit_transform(values)  # print(integer_encoded)
+    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
+    integer_encoded = label_encoder.transform(values)  # print(integer_encoded)
     onehot_encoder = OneHotEncoder(sparse=False)
     integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
     onehot_encoded = onehot_encoder.fit_transform(integer_encoded)  # print(onehot_encoded)
     # inverted = label_encoder.inverse_transform([argmax(onehot_encoded[0, :])])  # Return original label from encoding
+    # np.save(os.path.join(MASTER_DIR, 'form_classes.npy'), label_encoder.classes_)
+    # print(label_encoder.classes_)
+
+    """
+    # Convert Phrases to One Hot encoding
+    values = np.array([np.array([np.array(y) for y in x]) for x in lbls])  # print(values)
+    print(values)
+    label_encoder = LabelEncoder()
+    integer_encoded = label_encoder.fit_transform(values)  # print(integer_encoded)
+    onehot_encoder = OneHotEncoder(sparse=False)
+    integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
+    onehot_labels = onehot_encoder.fit_transform(integer_encoded)  # print(onehot_encoded)
+    # inverted = label_encoder.inverse_transform([argmax(onehot_encoded[0, :])])  # Return original label from encoding
+    """
     return nums, lbls, onehot_encoded
 
 
