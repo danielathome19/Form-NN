@@ -103,6 +103,22 @@ VAL_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/Validate/')
 
 
 # region DEPRECATED
+# Deprecated WORKING PIPELINE MODEL
+def old_formnn_pipeline(combined, output_channels=32, lrval=0.0001):
+    z = layers.ZeroPadding2D(padding=((1, 1), (6, 6)))(combined)
+    z = layers.Conv2D(filters=(output_channels * 2), kernel_size=(3, 5), strides=(1, 1),
+                      padding='same', dilation_rate=(1, 3))(z)
+    z = layers.LeakyReLU(alpha=lrval)(z)
+    z = layers.SpatialDropout2D(rate=0.5)(z)
+    # z = layers.Reshape(target_shape=(-1, 1, output_channels * 152))(z)
+    z = layers.Conv2D(filters=output_channels * 4, kernel_size=(1, 1), strides=(1, 1), padding='same')(z)
+    z = layers.LeakyReLU(alpha=lrval)(z)
+    z = layers.SpatialDropout2D(rate=0.5)(z)
+    z = layers.Conv2D(filters=1, kernel_size=(1, 1), strides=(1, 1), padding='same')(z)
+    z = layers.GlobalMaxPooling2D()(z)
+    return z
+
+
 # Deprecated MLS MODEL
 def cnn_mls(output_channels, lrval=0.0001):
     model = tf.keras.Sequential()
@@ -481,13 +497,16 @@ def formnn_pipeline(combined, output_channels=32, lrval=0.0001):
     z = layers.Conv2D(filters=(output_channels * 2), kernel_size=(3, 5), strides=(1, 1),
                       padding='same', dilation_rate=(1, 3))(z)
     z = layers.LeakyReLU(alpha=lrval)(z)
-    z = layers.SpatialDropout2D(rate=0.5)(z)  # ?
+    z = layers.SpatialDropout2D(rate=0.5)(z)
     # z = layers.Reshape(target_shape=(-1, 1, output_channels * 152))(z)
     z = layers.Conv2D(filters=output_channels * 4, kernel_size=(1, 1), strides=(1, 1), padding='same')(z)
     z = layers.LeakyReLU(alpha=lrval)(z)
-    z = layers.SpatialDropout2D(rate=0.5)(z)  # ?
-    z = layers.Conv2D(filters=1, kernel_size=(1, 1), strides=(1, 1), padding='same')(z)
+    z = layers.SpatialDropout2D(rate=0.5)(z)
+    z = layers.Conv2D(filters=output_channels * 8, kernel_size=(1, 1), strides=(1, 1), padding='same')(z)
+    z = layers.LeakyReLU(alpha=lrval)(z)
     z = layers.GlobalMaxPooling2D()(z)
+    z = layers.Flatten()(z)
+    z = layers.Dense(12, activation='sigmoid')(z)
     return z
 
 
@@ -498,9 +517,8 @@ def formnn_fuse(output_channels=32, lrval=0.0001):
     cnn2_in = formnn_pipeline(combined, output_channels, lrval=lrval)
     opt = keras.optimizers.Adam(lr=lrval)  # learning rate
     model = keras.models.Model(inputs=[cnn1_mel.input, cnn1_sslm.input], outputs=[cnn2_in])  # --v ['accuracy'])
-    # model.compile(loss='sparse_categorical_crossentropy', optimizer=opt, metrics=[keras.metrics.Accuracy()])
     model.compile(loss=keras.losses.BinaryCrossentropy(from_logits=True), optimizer=opt,
-                  metrics=[keras.metrics.Accuracy()])
+                  metrics=['accuracy'])
     # metrics=[tf.keras.metrics.Precision(), tf.keras.metrics.Recall()])
     # Try categorical_crossentropy
 
@@ -581,7 +599,7 @@ def trainModel():
                     break
             tpl = next(gen1)  # keras.utils.to_categorical(tpl[1])
             # yield [tf.expand_dims(tpl[0], axis=-1), tf.expand_dims(next(gen2)[0], axis=-1)], tpl[1]
-            yield [tf.expand_dims(tpl[0], axis=-1), next(multi_input_generator_helper(gen2, gen3, gen4, gen5))], tpl[1]
+            yield [tpl[0], next(multi_input_generator_helper(gen2, gen3, gen4, gen5))], tpl[1]
 
     train_datagen = multi_input_generator(mls_train, sslm_cmcos_train, sslm_cmeuc_train, sslm_mfcos_train,
                                           sslm_mfeuc_train)
@@ -592,10 +610,12 @@ def trainModel():
 
     steps_per_epoch = len(list(mls_train)) // batch_size
     steps_per_valid = len(list(mls_train2)) // batch_size  # mls_val
+    label_encoder = LabelEncoder()
+    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))  # len(label_encoder.classes_) for nn
 
     trmodel = formnn_fuse(output_channels=32, lrval=0.00001)
     # , lrval=.009999999776482582)(32) CNN Layer 1 Output Characteristic Maps                'val_loss' or val_accuracy
-    checkpoint = ModelCheckpoint(os.path.join(MASTER_DIR, 'best_formNN_model.hdf5'), monitor='val_loss', verbose=0,  # 1
+    checkpoint = ModelCheckpoint(os.path.join(MASTER_DIR, 'best_formNN_model.hdf5'), monitor='val_accuracy', verbose=0,
                                  save_best_only=True, mode='max', save_freq='epoch', save_weights_only=True)
     model_history = trmodel.fit(train_datagen, epochs=10, verbose=1, validation_data=valid_datagen,
                                 shuffle=False, callbacks=[checkpoint], batch_size=batch_size,
@@ -612,7 +632,6 @@ def trainModel():
     plt.savefig('Initial_Model_Loss.png')
     plt.show()
 
-    """
     # print(model_history.history.keys())
     #   dict_keys(['loss', 'precision', 'recall', 'val_loss', 'val_precision', 'val_recall'])
     # PLOT MODEL HISTORY OF ACCURACY AND LOSS OVER EPOCHS
@@ -626,7 +645,8 @@ def trainModel():
     plt.show()
     # pd.DataFrame(model_history.history).plot()  # figsize=(8, 5)
     # plt.show()
-    
+
+    """
     plt.plot(model_history.history['precision'])
     plt.plot(model_history.history['val_precision'])
     plt.title('Model Precision')
@@ -646,13 +666,10 @@ def trainModel():
     plt.show()
     """
 
-    print("Running prediction...")
     predictions = trmodel.predict_generator(train_datagen, steps=1, verbose=1)
     print(predictions)
     print("Prediction complete!")
 
-    label_encoder = LabelEncoder()
-    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
     inverted = label_encoder.inverse_transform([np.argmax(predictions[0, :])])
     print(inverted)
 

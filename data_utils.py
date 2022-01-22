@@ -757,6 +757,7 @@ def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1):
     onehot_encoder = OneHotEncoder(sparse=False)
     integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
     onehot_encoded = onehot_encoder.fit_transform(integer_encoded)  # print(onehot_encoded)
+    # onehot_encoded = to_categorical(integer_encoded, len(label_encoder.classes_))
     # inverted = label_encoder.inverse_transform([argmax(onehot_encoded[0, :])])  # Return original label from encoding
     # np.save(os.path.join(MASTER_DIR, 'form_classes.npy'), label_encoder.classes_)
     # print(label_encoder.classes_)
@@ -772,7 +773,7 @@ def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1):
     onehot_labels = onehot_encoder.fit_transform(integer_encoded)  # print(onehot_encoded)
     # inverted = label_encoder.inverse_transform([argmax(onehot_encoded[0, :])])  # Return original label from encoding
     """
-    return nums, lbls, onehot_encoded
+    return nums, lbls, tf.expand_dims(onehot_encoded, axis=-1)
 
 
 def prepend_line(file_name, line):
