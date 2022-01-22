@@ -9,16 +9,14 @@ import scipy
 from scipy.spatial import distance
 import pandas as pd
 import tensorflow.keras as k
-import matplotlib.pyplot as plt
 import data_utils as du
-import torch as pt
-from torch.utils.data.dataset import Dataset
-from torch.utils.data import DataLoader
-# import torchvision.transforms as transforms
+import tensorflow as tf
+import matplotlib.pyplot as plt
 
 start_time = time.time()
 
 
+# region DataPreparation
 def compute_ssm(X, metric="cosine"):
     """Computes the self-similarity matrix of X."""
     D = distance.pdist(X, metric=metric)
@@ -167,9 +165,9 @@ def ssm_gen(spectrogram, pooling_factor):
                 ssm[i, j] = 0
 
     return ssm
+# endregion
 
 
-"""----------VARIABLES----------"""
 window_size = 2048  # (samples/frame)
 hop_length = 1024  # overlap 50% (samples/frame)
 sr_desired = 44100
@@ -180,7 +178,6 @@ L_near = round(L_sec_near * sr_desired / hop_length)  # conversion of lag L seco
 
 MASTER_DIR = 'D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis/'
 DEFAULT_LABELPATH = os.path.join(MASTER_DIR, 'Labels/')
-# TRAIN_DIR = os.path.join(MASTER_DIR, 'Data/Train/')
 TRAIN_DIR = 'D:/Master Thesis Input/Train/'
 MIDI_DIR = os.path.join(MASTER_DIR, 'Data/MIDIs/')
 
@@ -276,9 +273,7 @@ def util_main(feature, mode="cos"):
     print("All files have been converted. Duration: {:.2f}s".format(time.time() - start_time))
 
 
-"""----------INPUT UTILS----------"""
-
-
+# region Transformations
 def gaussian(x, mu, sig):
     """Create array of labels"""
     return np.exp(-np.power((x - mu) / sig, 2.) / 2)
@@ -303,7 +298,7 @@ def borders(image, label, labels_sec, label_form):
     new_vector = (vector * hop_length + window_size / 2) / sr
     sigma = 0.1
     gauss_array = []
-    for mu in (label_padded[1:]):  # Ignore first label (beginning of song) due to insignificance
+    for mu in (label_padded[1:]):  # Ignore first label (beginning of song) due to insignificance (0.000 Silence)
         gauss_array = np.append(gauss_array, gaussian(new_vector, mu, sigma))
     for i in range(len(gauss_array)):
         if gauss_array[i] > 1:
@@ -382,15 +377,16 @@ def normalize_image(image, label, labels_sec, label_form):
     # image = (image-np.min(image))/(np.max(image)-np.min(image))
     image = np.expand_dims(image, axis=0)
     return image, label, labels_sec, label_form
+# endregion
 
 
 class BuildDataloader(k.utils.Sequence):
     songs_list = []
 
-    def __init__(self, images_path, labels_path=DEFAULT_LABELPATH, transforms=None, batch_size=32):
+    def __init__(self, images_path, label_path=DEFAULT_LABELPATH, transforms=None, batch_size=32, end=-1):
         """Song name list"""
         self.images_path = images_path
-        self.labels_path = labels_path
+        self.labels_path = label_path
         self.images_list = []
         self.labels_list = []
         self.labels_sec_list = []
@@ -401,16 +397,19 @@ class BuildDataloader(k.utils.Sequence):
 
         print("Building dataloader for " + self.images_path)
         cnt = 1
-        for (im_dirpath, im_dirnames, im_filenames) in os.walk(self.images_path):  # images files of images path
-            for f in im_filenames:  # loop in each images png name files (songs_IDs)
+        for (im_dirpath, im_dirnames, im_filenames) in os.walk(self.images_path):
+            for f in im_filenames:
                 if f.endswith('.npy'):
                     # print("Reading file #" + str(cnt))
                     img_path = im_dirpath + f
-                    image = np.load(img_path)  # plt.imread if we want to open image
+                    image = np.load(img_path)
+                    # plt.imshow(img_path)  # View image
+                    # plt.show()
                     self.images_list.append(image)
                     cnt += 1
-                    if cnt == 31:  # TODO: REMOVE
-                        break
+                    if end != -1:
+                        if cnt == end:
+                            break
             """ 
             for (lab_dirpath, lab_dirnames, lab_filenames) in os.walk(self.labels_path):  # labels files fo labels path
                 for f in im_filenames:  # loop in each images png name files (songs_IDs)
@@ -439,13 +438,12 @@ class BuildDataloader(k.utils.Sequence):
                         self.labels_list.append(lbls_phrases)
                         self.labels_sec_list.append(lbls_seconds)
             """
-        lbls_seconds, lbls_phrases, lbl_forms = du.ReadLabelSecondsPhrasesFromFolder(lblpath=labels_path, stop=cnt)
+        lbls_seconds, lbls_phrases, lbl_forms = du.ReadLabelSecondsPhrasesFromFolder(lblpath=self.labels_path, stop=cnt)
         self.labels_list = lbls_phrases
         self.labels_sec_list = lbls_seconds
         self.labels_form_list = lbl_forms
         self.transforms = transforms
 
-    # [proc.open_files() for proc in psutil.process_iter() if proc.pid == os.getpid()]
     def __len__(self):
         """count songs in list"""
         return len(self.images_list)
@@ -463,14 +461,10 @@ class BuildDataloader(k.utils.Sequence):
         # print("Labels: ", str(len(labels)), "Images: ", str(len(image)), image.shape)
         labels_sec = self.labels_sec_list[index]
         labels_form = self.labels_form_list[index]
-        # From numpy to Torch Tensors
-        # image = torch.from_numpy(image)
-        # label = torch.from_numpy(label)
         if self.transforms is not None:
             for t in self.transforms:
                 image, labels, labels_sec, labels_form = t(image, labels, labels_sec, labels_form)
-        # return image, [labels_sec, labels_form]  # [labels, labels_sec, labels_form]
-        return image, labels_form
+        return image, [labels, labels_sec, labels_form]
 
     def __next__(self):
         if self.n >= self.max:

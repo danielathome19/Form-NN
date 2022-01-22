@@ -463,7 +463,7 @@ def buildValidationSet():
 
 
 """===================================================================================="""
-# region MODEL_DEFINITION
+# region ModelDefinition
 
 
 # MLS MODEL
@@ -492,7 +492,7 @@ def formnn_sslm(output_channels=32, lrval=0.0001):
 
 
 # PIPELINE MODEL
-def formnn_pipeline(combined, output_channels=32, lrval=0.0001):
+def formnn_pipeline(combined, output_channels=32, lrval=0.0001, numclasses=12):
     z = layers.ZeroPadding2D(padding=((1, 1), (6, 6)))(combined)
     z = layers.Conv2D(filters=(output_channels * 2), kernel_size=(3, 5), strides=(1, 1),
                       padding='same', dilation_rate=(1, 3))(z)
@@ -505,29 +505,24 @@ def formnn_pipeline(combined, output_channels=32, lrval=0.0001):
     z = layers.Conv2D(filters=output_channels * 8, kernel_size=(1, 1), strides=(1, 1), padding='same')(z)
     z = layers.LeakyReLU(alpha=lrval)(z)
     z = layers.GlobalMaxPooling2D()(z)
-    z = layers.Flatten()(z)
-    z = layers.Dense(12, activation='sigmoid')(z)
+    # z = layers.Flatten()(z)
+    z = layers.Dense(numclasses, activation='sigmoid')(z)
     return z
 
 
-def formnn_fuse(output_channels=32, lrval=0.0001):
+def formnn_fuse(output_channels=32, lrval=0.00001, numclasses=12):
     cnn1_mel = formnn_mls(output_channels, lrval=lrval)
     cnn1_sslm = formnn_sslm(output_channels, lrval=lrval)
     combined = layers.concatenate([cnn1_mel.output, cnn1_sslm.output], axis=2)
-    cnn2_in = formnn_pipeline(combined, output_channels, lrval=lrval)
-    opt = keras.optimizers.Adam(lr=lrval)  # learning rate
-    model = keras.models.Model(inputs=[cnn1_mel.input, cnn1_sslm.input], outputs=[cnn2_in])  # --v ['accuracy'])
-    model.compile(loss=keras.losses.BinaryCrossentropy(from_logits=True), optimizer=opt,
-                  metrics=['accuracy'])
-    # metrics=[tf.keras.metrics.Precision(), tf.keras.metrics.Recall()])
-    # Try categorical_crossentropy
-
-    model.summary()
+    cnn2_in = formnn_pipeline(combined, output_channels, lrval=lrval, numclasses=numclasses)
+    opt = keras.optimizers.Adam(lr=lrval)
+    model = keras.models.Model(inputs=[cnn1_mel.input, cnn1_sslm.input], outputs=[cnn2_in])
+    model.compile(loss=keras.losses.BinaryCrossentropy(from_logits=True), optimizer=opt, metrics=['accuracy'])
+    model.summary()  # Try categorical_crossentropy, metrics=[tf.keras.metrics.Precision(), tf.keras.metrics.Recall()])
     if not os.path.isfile(os.path.join(MASTER_DIR, 'FormNN_Model_Diagram.png')):
         plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_Model_Diagram.png'),
                    show_shapes=True, show_layer_names=True, expand_nested=True, dpi=300)
     return model
-
 # endregion
 
 
@@ -535,51 +530,51 @@ def trainModel():
     batch_size = 1
 
     # region MODEL_DIRECTORIES
-    mls_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'MLS/'), labels_path=TRAIN_LABELPATH,
+    mls_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'MLS/'), label_path=TRAIN_LABELPATH, end=31,
                                     transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
-    sslm_cmcos_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_COS/'), labels_path=TRAIN_LABELPATH,
+    sslm_cmcos_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_COS/'), label_path=TRAIN_LABELPATH, end=31,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_cmeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_EUC/'), labels_path=TRAIN_LABELPATH,
+    sslm_cmeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_EUC/'), label_path=TRAIN_LABELPATH, end=31,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_mfcos_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_COS/'), labels_path=TRAIN_LABELPATH,
+    sslm_mfcos_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_COS/'), label_path=TRAIN_LABELPATH, end=31,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_mfeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_EUC/'), labels_path=TRAIN_LABELPATH,
+    sslm_mfeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_EUC/'), label_path=TRAIN_LABELPATH, end=31,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
 
     # """
-    mls_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'MLS/'), labels_path=TRAIN2_LABELPATH,
+    mls_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'MLS/'), label_path=TRAIN2_LABELPATH,
                                      transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
-    sslm_cmcos_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_CRM_COS/'), labels_path=TRAIN2_LABELPATH,
+    sslm_cmcos_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_CRM_COS/'), label_path=TRAIN2_LABELPATH,
                                             transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_cmeuc_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_CRM_EUC/'), labels_path=TRAIN2_LABELPATH,
+    sslm_cmeuc_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_CRM_EUC/'), label_path=TRAIN2_LABELPATH,
                                             transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_mfcos_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_MFCC_COS/'), labels_path=TRAIN2_LABELPATH,
+    sslm_mfcos_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_MFCC_COS/'), label_path=TRAIN2_LABELPATH,
                                             transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_mfeuc_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_MFCC_EUC/'), labels_path=TRAIN2_LABELPATH,
+    sslm_mfeuc_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_MFCC_EUC/'), label_path=TRAIN2_LABELPATH,
                                             transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
     """
 
-    mls_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'MLS/'), labels_path=VAL_LABELPATH,
+    mls_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'MLS/'), label_path=VAL_LABELPATH,
                                   transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
-    sslm_cmcos_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'SSLM_CRM_COS/'), labels_path=VAL_LABELPATH,
+    sslm_cmcos_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'SSLM_CRM_COS/'), label_path=VAL_LABELPATH,
                                          transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_cmeuc_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'SSLM_CRM_EUC/'), labels_path=VAL_LABELPATH,
+    sslm_cmeuc_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'SSLM_CRM_EUC/'), label_path=VAL_LABELPATH,
                                          transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_mfcos_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'SSLM_MFCC_COS/'), labels_path=VAL_LABELPATH,
+    sslm_mfcos_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'SSLM_MFCC_COS/'), label_path=VAL_LABELPATH,
                                          transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_mfeuc_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'SSLM_MFCC_EUC/'), labels_path=VAL_LABELPATH,
+    sslm_mfeuc_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'SSLM_MFCC_EUC/'), label_path=VAL_LABELPATH,
                                          transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
 
     "" "
-    mls_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'MLS/'), labels_path=TEST_LABELPATH,
+    mls_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'MLS/'), label_path=TEST_LABELPATH,
                                    transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
-    sslm_cmcos_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'SSLM_CRM_COS/'), labels_path=TEST_LABELPATH,
+    sslm_cmcos_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'SSLM_CRM_COS/'), label_path=TEST_LABELPATH,
                                           transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_cmeuc_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'SSLM_CRM_EUC/'), labels_path=TEST_LABELPATH,
+    sslm_cmeuc_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'SSLM_CRM_EUC/'), label_path=TEST_LABELPATH,
                                           transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_mfcos_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'SSLM_MFCC_COS/'), labels_path=TEST_LABELPATH,
+    sslm_mfcos_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'SSLM_MFCC_COS/'), label_path=TEST_LABELPATH,
                                           transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_mfeuc_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'SSLM_MFCC_EUC/'), labels_path=TEST_LABELPATH,
+    sslm_mfeuc_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'SSLM_MFCC_EUC/'), label_path=TEST_LABELPATH,
                                           transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
     """
     # endregion
@@ -591,7 +586,7 @@ def trainModel():
                                                                  np.concatenate((next(gen3)[0], next(gen4)[0]),
                                                                                 axis=-1)), axis=-1)), axis=-1), axis=-1)
 
-    def multi_input_generator(gen1, gen2, gen3, gen4, gen5, stop=-1):
+    def multi_input_generator(gen1, gen2, gen3, gen4, gen5, stop=-1, feature=2):
         while True:
             if stop != -1:  # TODO: remove condition
                 stop -= 1
@@ -599,7 +594,7 @@ def trainModel():
                     break
             tpl = next(gen1)  # keras.utils.to_categorical(tpl[1])
             # yield [tf.expand_dims(tpl[0], axis=-1), tf.expand_dims(next(gen2)[0], axis=-1)], tpl[1]
-            yield [tpl[0], next(multi_input_generator_helper(gen2, gen3, gen4, gen5))], tpl[1]
+            yield [tpl[0], next(multi_input_generator_helper(gen2, gen3, gen4, gen5))], tpl[1][feature]
 
     train_datagen = multi_input_generator(mls_train, sslm_cmcos_train, sslm_cmeuc_train, sslm_mfcos_train,
                                           sslm_mfeuc_train)
@@ -613,7 +608,7 @@ def trainModel():
     label_encoder = LabelEncoder()
     label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))  # len(label_encoder.classes_) for nn
 
-    trmodel = formnn_fuse(output_channels=32, lrval=0.00001)
+    trmodel = formnn_fuse(output_channels=32, lrval=0.00001, numclasses=12)
     # , lrval=.009999999776482582)(32) CNN Layer 1 Output Characteristic Maps                'val_loss' or val_accuracy
     checkpoint = ModelCheckpoint(os.path.join(MASTER_DIR, 'best_formNN_model.hdf5'), monitor='val_accuracy', verbose=0,
                                  save_best_only=True, mode='max', save_freq='epoch', save_weights_only=True)
@@ -666,7 +661,7 @@ def trainModel():
     plt.show()
     """
 
-    predictions = trmodel.predict_generator(train_datagen, steps=1, verbose=1)
+    predictions = trmodel.predict_generator(train_datagen, steps=1, verbose=1, workers=0)
     print(predictions)
     print("Prediction complete!")
 

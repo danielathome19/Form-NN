@@ -632,7 +632,7 @@ def create_mls_sslm2(filename, name="", foldername="", filepath=DEFAULT_FILEPATH
 
     label_path = DEFAULT_LABELPATH + foldername
     file = "/" + os.path.basename(name) + ".txt"
-    nums, lbls = ReadDataFromtxt(label_path, file)
+    nums, lbls, form = ReadDataFromtxt(label_path, file)
     labels_array = np.asarray(nums)
     array = labels_array.astype(np.float)
 
