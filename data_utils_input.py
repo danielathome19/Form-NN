@@ -380,14 +380,13 @@ def normalize_image(image, label, labels_sec, label_form):
 # endregion
 
 
+# Load MLS and SSLM Data
 class BuildDataloader(k.utils.Sequence):
-    songs_list = []
-
     def __init__(self, images_path, label_path=DEFAULT_LABELPATH, transforms=None, batch_size=32, end=-1):
-        """Song name list"""
+        self.songs_list = []
         self.images_path = images_path
-        self.labels_path = label_path
         self.images_list = []
+        self.labels_path = label_path
         self.labels_list = []
         self.labels_sec_list = []
         self.labels_form_list = []
@@ -400,6 +399,7 @@ class BuildDataloader(k.utils.Sequence):
         for (im_dirpath, im_dirnames, im_filenames) in os.walk(self.images_path):
             for f in im_filenames:
                 if f.endswith('.npy'):
+                    self.songs_list.append(os.path.splitext(f)[0])
                     # print("Reading file #" + str(cnt))
                     img_path = im_dirpath + f
                     image = np.load(img_path)
@@ -445,11 +445,9 @@ class BuildDataloader(k.utils.Sequence):
         self.transforms = transforms
 
     def __len__(self):
-        """count songs in list"""
         return len(self.images_list)
 
     def __getitem__(self, index):
-        """take song from list"""
         # print("LEN: " + str(self.max) + " TRU LEN: " + str(len(self.images_list)) + " INDX: " + str(index))
         image = self.images_list[index]
         # print(image.shape, image.ndim)
@@ -461,10 +459,88 @@ class BuildDataloader(k.utils.Sequence):
         # print("Labels: ", str(len(labels)), "Images: ", str(len(image)), image.shape)
         labels_sec = self.labels_sec_list[index]
         labels_form = self.labels_form_list[index]
+        song_name = self.songs_list[index]
         if self.transforms is not None:
             for t in self.transforms:
                 image, labels, labels_sec, labels_form = t(image, labels, labels_sec, labels_form)
-        return image, [labels, labels_sec, labels_form]
+        return image, [labels, labels_sec, labels_form, song_name]
+
+    def __next__(self):
+        if self.n >= self.max:
+            self.n = 0
+        result = self.__getitem__(self.n)
+        self.n += 1
+        return result
+
+
+# Load MIDI Data
+class BuildMIDIloader(k.utils.Sequence):
+    def __init__(self, midi_path, label_path=DEFAULT_LABELPATH, transforms=None, batch_size=32, end=-1):
+        self.songs_list = []
+        self.midi_path = midi_path
+        self.midi_list = pd.DataFrame()
+        self.labels_path = label_path
+        self.labels_list = []
+        self.labels_sec_list = []
+        self.labels_form_list = []
+        self.batch_size = batch_size
+        self.n = 0
+        self.max = self.__len__()
+
+        print("Building dataloader for " + self.midi_path)
+        df = pd.DataFrame(columns=['spectral_contrast'])
+        cnt = 1
+        for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(self.midi_path):
+            for f in mid_filenames:
+                if f.endswith('.mid') or f.endswith('.midi'):
+                    self.songs_list.append(os.path.splitext(f)[0])
+                    # print("Reading file #" + str(cnt))
+                    mid_path = mid_dirpath + f
+                    X, sample_rate = librosa.load(mid_path, res_type='kaiser_fast', duration=3, sr=44100, offset=0.5)
+                    contrast = librosa.feature.spectral_contrast(y=X, sr=sample_rate)
+                    """ Plot spectral contrast
+                    plt.figure(figsize=(10, 4))
+                    librosa.display.specshow(contrast, cmap='plasma', x_axis='time')
+                    plt.colorbar()
+                    plt.ylabel('Frequency bands')
+                    plt.title('Spectral contrast')
+                    plt.tight_layout()
+                    plt.show()
+                    """
+                    contrast = np.mean(contrast, axis=0)
+                    df.loc[cnt-1] = [contrast]
+                    cnt += 1
+                    if end != -1:
+                        if cnt == end:
+                            break
+        df = pd.DataFrame(df['spectral_contrast'].values.tolist())
+        df = df.fillna(0)
+        # print if name = Sonata No. 14, K. 457 – Mvt. 3 by mozart (rondo)
+        mean = np.mean(df, axis=0)
+        std = np.std(df, axis=0)
+        df = (df - mean) / std
+        df = np.array(df)
+        df = df[:, :, np.newaxis]
+        self.midi_list = df
+        lbls_seconds, lbls_phrases, lbl_forms = du.ReadLabelSecondsPhrasesFromFolder(lblpath=self.labels_path, stop=cnt)
+        self.labels_list = lbls_phrases
+        self.labels_sec_list = lbls_seconds
+        self.labels_form_list = lbl_forms
+        self.transforms = transforms
+
+    def __len__(self):
+        return self.midi_list.shape[0]
+
+    def __getitem__(self, index):
+        mid = self.midi_list[index]
+        labels = self.labels_list[index]
+        labels_sec = self.labels_sec_list[index]
+        labels_form = self.labels_form_list[index]
+        song_name = self.songs_list[index]
+        if self.transforms is not None:
+            for t in self.transforms:
+                mid, labels, labels_sec, labels_form = t(mid, labels, labels_sec, labels_form)
+        return mid, [labels, labels_sec, labels_form, song_name]
 
     def __next__(self):
         if self.n >= self.max:

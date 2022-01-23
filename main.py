@@ -78,7 +78,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # region Directories
 MASTER_DIR = 'D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis/'
 MASTER_INPUT_DIR = 'D:/Master Thesis Input/'
-MASTER_LABELPATH = os.path.join(MASTER_DIR, 'Labels/')
+MASTER_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/')
 
 MIDI_Data_Dir = np.array(gb.glob(os.path.join(MASTER_DIR, 'Data/MIDIs/*')))
 Train_Data_Dir = np.array(gb.glob(os.path.join(MASTER_INPUT_DIR, 'Train/*')))  # os.path.join(MASTER_DIR, 'Data/Train/*'
@@ -95,14 +95,31 @@ TRAIN2_DIR = os.path.join(MASTER_INPUT_DIR, 'Train2/')
 TEST_DIR = os.path.join(MASTER_INPUT_DIR, 'Test/')
 VAL_DIR = os.path.join(MASTER_INPUT_DIR, 'Validate/')
 
-TRAIN_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/Train/')
-TRAIN2_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/Train2/')
-TEST_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/Test/')
-VAL_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/Validate/')
+TRAIN_LABELPATH = os.path.join(MASTER_LABELPATH, 'Train/')
+TRAIN2_LABELPATH = os.path.join(MASTER_LABELPATH, 'Train2/')
+TEST_LABELPATH = os.path.join(MASTER_LABELPATH, 'Test/')
+VAL_LABELPATH = os.path.join(MASTER_LABELPATH, 'Validate/')
 # endregion
 
 
 # region DEPRECATED
+# Deprecated WORKING FUSE MODEL
+def old_formnn_fuse(output_channels=32, lrval=0.00001, numclasses=12):
+    cnn1_mel = formnn_mls(output_channels, lrval=lrval)
+    cnn1_sslm = formnn_sslm(output_channels, lrval=lrval)
+    combined = layers.concatenate([cnn1_mel.output, cnn1_sslm.output], axis=2)
+    cnn2_in = formnn_pipeline(combined, output_channels, lrval=lrval, numclasses=numclasses)
+    cnn2_in = layers.Dense(numclasses, activation='sigmoid')(cnn2_in)
+    opt = keras.optimizers.Adam(lr=lrval)
+    model = keras.models.Model(inputs=[cnn1_mel.input, cnn1_sslm.input], outputs=[cnn2_in])
+    model.compile(loss=keras.losses.BinaryCrossentropy(from_logits=True), optimizer=opt, metrics=['accuracy'])
+    model.summary()  # Try categorical_crossentropy, metrics=[tf.keras.metrics.Precision(), tf.keras.metrics.Recall()])
+    if not os.path.isfile(os.path.join(MASTER_DIR, 'FormNN_Model_Diagram.png')):
+        plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_Model_Diagram.png'),
+                   show_shapes=True, show_layer_names=True, expand_nested=True, dpi=300)
+    return model
+
+
 # Deprecated WORKING PIPELINE MODEL
 def old_formnn_pipeline(combined, output_channels=32, lrval=0.0001):
     z = layers.ZeroPadding2D(padding=((1, 1), (6, 6)))(combined)
@@ -466,6 +483,25 @@ def buildValidationSet():
 # region ModelDefinition
 
 
+# MIDI MODEL -- Try switching activation to ELU instead of RELU. Mimic visual/aural analysis using ensemble method
+def formnn_midi(output_channels=32, lrval=0.0001, numclasses=12):
+    inputC = layers.Input(shape=(None, 1))
+    w = layers.Conv1D(output_channels * 2, kernel_size=10, activation='relu', input_shape=(None, 1))(inputC)
+    w = layers.Conv1D(output_channels * 4, kernel_size=10, activation='relu', kernel_regularizer=l2(0.01),
+                      bias_regularizer=l2(0.01))(w)
+    w = layers.MaxPooling1D(pool_size=6)(w)
+    w = layers.Dropout(0.4)(w)
+    w = layers.Conv1D(output_channels * 4, kernel_size=10, activation='relu')(w)
+    w = layers.MaxPooling1D(pool_size=6)(w)
+    w = layers.Dropout(0.4)(w)
+    w = layers.GlobalMaxPooling1D()(w)
+    w = layers.Dense(output_channels * 8, activation='relu')(w)
+    w = layers.Dropout(0.4)(w)
+    w = layers.Dense(numclasses, activation='sigmoid')(w)
+    w = keras.models.Model(inputs=inputC, outputs=w)
+    return w
+
+
 # MLS MODEL
 def formnn_mls(output_channels=32, lrval=0.0001):
     inputA = layers.Input(batch_input_shape=(None, None, None, 1))
@@ -516,13 +552,20 @@ def formnn_fuse(output_channels=32, lrval=0.00001, numclasses=12):
     combined = layers.concatenate([cnn1_mel.output, cnn1_sslm.output], axis=2)
     cnn2_in = formnn_pipeline(combined, output_channels, lrval=lrval, numclasses=numclasses)
     opt = keras.optimizers.Adam(lr=lrval)
-    model = keras.models.Model(inputs=[cnn1_mel.input, cnn1_sslm.input], outputs=[cnn2_in])
+
+    imgmodel = keras.models.Model(inputs=[cnn1_mel.input, cnn1_sslm.input], outputs=[cnn2_in])
+    midmodel = formnn_midi(output_channels, lrval=lrval, numclasses=numclasses)
+    averageOut = layers.Average()([imgmodel.output, midmodel.output])
+    model = keras.models.Model(inputs=[imgmodel.input[0], imgmodel.input[1], midmodel.input], outputs=averageOut)
+
     model.compile(loss=keras.losses.BinaryCrossentropy(from_logits=True), optimizer=opt, metrics=['accuracy'])
     model.summary()  # Try categorical_crossentropy, metrics=[tf.keras.metrics.Precision(), tf.keras.metrics.Recall()])
     if not os.path.isfile(os.path.join(MASTER_DIR, 'FormNN_Model_Diagram.png')):
         plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_Model_Diagram.png'),
                    show_shapes=True, show_layer_names=True, expand_nested=True, dpi=300)
     return model
+
+
 # endregion
 
 
@@ -540,6 +583,8 @@ def trainModel():
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
     sslm_mfeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_EUC/'), label_path=TRAIN_LABELPATH, end=31,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
+    midi_train = dus.BuildMIDIloader(os.path.join(TRAIN_DIR, 'MIDI/'), label_path=TRAIN_LABELPATH, end=31,
+                                     batch_size=batch_size)
 
     # """
     mls_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'MLS/'), label_path=TRAIN2_LABELPATH,
@@ -552,6 +597,8 @@ def trainModel():
                                             transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
     sslm_mfeuc_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_MFCC_EUC/'), label_path=TRAIN2_LABELPATH,
                                             transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
+    midi_train2 = dus.BuildMIDIloader(os.path.join(TRAIN2_DIR, 'MIDI/'), label_path=TRAIN2_LABELPATH,
+                                      batch_size=batch_size)
     """
 
     mls_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'MLS/'), label_path=VAL_LABELPATH,
@@ -586,30 +633,31 @@ def trainModel():
                                                                  np.concatenate((next(gen3)[0], next(gen4)[0]),
                                                                                 axis=-1)), axis=-1)), axis=-1), axis=-1)
 
-    def multi_input_generator(gen1, gen2, gen3, gen4, gen5, stop=-1, feature=2):
+    def multi_input_generator(gen1, gen2, gen3, gen4, gen5, gen6, stop=-1, feature=2):
         while True:
             if stop != -1:  # TODO: remove condition
                 stop -= 1
                 if stop == 0:
                     break
             tpl = next(gen1)  # keras.utils.to_categorical(tpl[1])
-            # yield [tf.expand_dims(tpl[0], axis=-1), tf.expand_dims(next(gen2)[0], axis=-1)], tpl[1]
-            yield [tpl[0], next(multi_input_generator_helper(gen2, gen3, gen4, gen5))], tpl[1][feature]
+            yield [tpl[0], next(multi_input_generator_helper(gen2, gen3, gen4, gen5)),
+                   tf.expand_dims(next(gen6)[0], axis=0)], tpl[1][feature]
 
     train_datagen = multi_input_generator(mls_train, sslm_cmcos_train, sslm_cmeuc_train, sslm_mfcos_train,
-                                          sslm_mfeuc_train)
+                                          sslm_mfeuc_train, midi_train)
     valid_datagen = multi_input_generator(mls_train2, sslm_cmcos_train2, sslm_cmeuc_train2, sslm_mfcos_train2,
-                                          sslm_mfeuc_train2)  # , stop=13)
+                                          sslm_mfeuc_train2, midi_train2)  # , stop=13)
     # valid_datagen = multi_input_generator(mls_val, sslm_cmcos_val, sslm_cmeuc_val, sslm_mfcos_val, sslm_mfeuc_val)
     # test_datagen = multi_input_generator(mls_test, sslm_cmcos_test, sslm_cmeuc_test, sslm_mfcos_test, sslm_mfeuc_test
+
+    print(next(train_datagen)[0][2].shape)
 
     steps_per_epoch = len(list(mls_train)) // batch_size
     steps_per_valid = len(list(mls_train2)) // batch_size  # mls_val
     label_encoder = LabelEncoder()
     label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))  # len(label_encoder.classes_) for nn
 
-    trmodel = formnn_fuse(output_channels=32, lrval=0.00001, numclasses=12)
-    # , lrval=.009999999776482582)(32) CNN Layer 1 Output Characteristic Maps                'val_loss' or val_accuracy
+    trmodel = formnn_fuse(output_channels=32, lrval=0.00001, numclasses=12)  # 'val_loss' or val_accuracy
     checkpoint = ModelCheckpoint(os.path.join(MASTER_DIR, 'best_formNN_model.hdf5'), monitor='val_accuracy', verbose=0,
                                  save_best_only=True, mode='max', save_freq='epoch', save_weights_only=True)
     model_history = trmodel.fit(train_datagen, epochs=10, verbose=1, validation_data=valid_datagen,
@@ -677,6 +725,7 @@ def trainModel():
     """
 
     # TODO: create a dense model (RNN?) that uses the audio data to classify the peaks
+    # Use spectral centroids, https://musicinformationretrieval.com/spectral_features.html
 
 
 if __name__ == '__main__':
