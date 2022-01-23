@@ -392,7 +392,6 @@ class BuildDataloader(k.utils.Sequence):
         self.labels_form_list = []
         self.batch_size = batch_size
         self.n = 0
-        self.max = self.__len__()
 
         print("Building dataloader for " + self.images_path)
         cnt = 1
@@ -408,7 +407,7 @@ class BuildDataloader(k.utils.Sequence):
                     self.images_list.append(image)
                     cnt += 1
                     if end != -1:
-                        if cnt == end:
+                        if cnt == end + 1:
                             break
             """ 
             for (lab_dirpath, lab_dirnames, lab_filenames) in os.walk(self.labels_path):  # labels files fo labels path
@@ -443,6 +442,7 @@ class BuildDataloader(k.utils.Sequence):
         self.labels_sec_list = lbls_seconds
         self.labels_form_list = lbl_forms
         self.transforms = transforms
+        self.max = self.__len__()
 
     def __len__(self):
         return len(self.images_list)
@@ -485,7 +485,6 @@ class BuildMIDIloader(k.utils.Sequence):
         self.labels_form_list = []
         self.batch_size = batch_size
         self.n = 0
-        self.max = self.__len__()
 
         print("Building dataloader for " + self.midi_path)
         df = pd.DataFrame(columns=['spectral_contrast'])
@@ -515,7 +514,6 @@ class BuildMIDIloader(k.utils.Sequence):
                             break
         df = pd.DataFrame(df['spectral_contrast'].values.tolist())
         df = df.fillna(0)
-        # print if name = Sonata No. 14, K. 457 – Mvt. 3 by mozart (rondo)
         mean = np.mean(df, axis=0)
         std = np.std(df, axis=0)
         df = (df - mean) / std
@@ -527,6 +525,7 @@ class BuildMIDIloader(k.utils.Sequence):
         self.labels_sec_list = lbls_seconds
         self.labels_form_list = lbl_forms
         self.transforms = transforms
+        self.max = self.__len__()
 
     def __len__(self):
         return self.midi_list.shape[0]

@@ -64,6 +64,7 @@ from data_utils_input import normalize_image, padding_MLS, padding_SSLM, borders
 from keras import backend as k
 from shutil import copyfile
 import fnmatch
+from skimage.transform import resize
 
 k.set_image_data_format('channels_last')
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -522,7 +523,8 @@ def formnn_sslm(output_channels=32, lrval=0.0001):
     y = layers.LeakyReLU(alpha=lrval)(y)
     y = layers.ZeroPadding2D(padding=((1, 1), (1, 1)))(y)
     y = layers.MaxPooling2D(pool_size=(5, 3), strides=(5, 1), padding='same')(y)
-    y = layers.ZeroPadding2D(padding=(13, 0))(y)
+    # y = layers.ZeroPadding2D(padding=(13, 0))(y)  # why?
+    y = layers.AveragePooling2D(pool_size=(1, 4))(y)
     y = keras.models.Model(inputs=inputB, outputs=y)
     return y
 
@@ -573,17 +575,17 @@ def trainModel():
     batch_size = 1
 
     # region MODEL_DIRECTORIES
-    mls_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'MLS/'), label_path=TRAIN_LABELPATH, end=31,
+    mls_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'MLS/'), label_path=TRAIN_LABELPATH, end=10,
                                     transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
-    sslm_cmcos_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_COS/'), label_path=TRAIN_LABELPATH, end=31,
+    sslm_cmcos_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_COS/'), label_path=TRAIN_LABELPATH, end=10,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_cmeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_EUC/'), label_path=TRAIN_LABELPATH, end=31,
+    sslm_cmeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_EUC/'), label_path=TRAIN_LABELPATH, end=10,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_mfcos_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_COS/'), label_path=TRAIN_LABELPATH, end=31,
+    sslm_mfcos_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_COS/'), label_path=TRAIN_LABELPATH, end=10,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_mfeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_EUC/'), label_path=TRAIN_LABELPATH, end=31,
+    sslm_mfeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_EUC/'), label_path=TRAIN_LABELPATH, end=10,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    midi_train = dus.BuildMIDIloader(os.path.join(TRAIN_DIR, 'MIDI/'), label_path=TRAIN_LABELPATH, end=31,
+    midi_train = dus.BuildMIDIloader(os.path.join(TRAIN_DIR, 'MIDI/'), label_path=TRAIN_LABELPATH, end=10,
                                      batch_size=batch_size)
 
     # """
@@ -599,7 +601,7 @@ def trainModel():
                                             transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
     midi_train2 = dus.BuildMIDIloader(os.path.join(TRAIN2_DIR, 'MIDI/'), label_path=TRAIN2_LABELPATH,
                                       batch_size=batch_size)
-    """
+    # """
 
     mls_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'MLS/'), label_path=VAL_LABELPATH,
                                   transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
@@ -612,7 +614,7 @@ def trainModel():
     sslm_mfeuc_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'SSLM_MFCC_EUC/'), label_path=VAL_LABELPATH,
                                          transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
 
-    "" "
+    """
     mls_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'MLS/'), label_path=TEST_LABELPATH,
                                    transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
     sslm_cmcos_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'SSLM_CRM_COS/'), label_path=TEST_LABELPATH,
@@ -626,12 +628,23 @@ def trainModel():
     """
     # endregion
 
-    def multi_input_generator_helper(gen1, gen2, gen3, gen4):
+    def multi_input_generator_helper(gen1, gen2, gen3, gen4, mlsshape):
         while True:
-            yield tf.expand_dims(np.concatenate((next(gen1)[0],
-                                                 np.concatenate((next(gen2)[0],
-                                                                 np.concatenate((next(gen3)[0], next(gen4)[0]),
-                                                                                axis=-1)), axis=-1)), axis=-1), axis=-1)
+            sslm1 = next(gen1)[0]
+            sslm1 = resize(sslm1, (max(mlsshape[0], sslm1.shape[0]), max(mlsshape[1], sslm1.shape[1])))
+            sslm2 = next(gen2)[0]
+            sslm2 = resize(sslm2, (max(mlsshape[0], sslm2.shape[0]), max(mlsshape[1], sslm2.shape[1])))
+            sslm3 = next(gen3)[0]
+            sslm3 = resize(sslm3, (max(mlsshape[0], sslm3.shape[0]), max(mlsshape[1], sslm3.shape[1])))
+            sslm4 = next(gen4)[0]
+            sslm4 = resize(sslm4, (max(mlsshape[0], sslm4.shape[0]), max(mlsshape[1], sslm4.shape[1])))
+            # yield sslm1.shape, [sslm1, sslm2, sslm3, sslm4]
+            # """
+            yield sslm1.shape, tf.expand_dims(
+                np.concatenate((sslm1,
+                                np.concatenate((sslm2,
+                                                np.concatenate((sslm3, sslm4),
+                                                               axis=-1)), axis=-1)), axis=-1), axis=-1)
 
     def multi_input_generator(gen1, gen2, gen3, gen4, gen5, gen6, stop=-1, feature=2):
         while True:
@@ -639,9 +652,10 @@ def trainModel():
                 stop -= 1
                 if stop == 0:
                     break
-            tpl = next(gen1)  # keras.utils.to_categorical(tpl[1])
-            yield [tpl[0], next(multi_input_generator_helper(gen2, gen3, gen4, gen5)),
-                   tf.expand_dims(next(gen6)[0], axis=0)], tpl[1][feature]
+            mlsgen = next(gen1)
+            sslmshape, sslmimgs = next(multi_input_generator_helper(gen2, gen3, gen4, gen5, mlsgen[0].shape))
+            mlsimgout = resize(mlsgen[0], sslmshape)
+            yield [mlsimgout, sslmimgs, tf.expand_dims(next(gen6)[0], axis=0)], mlsgen[1][feature]
 
     train_datagen = multi_input_generator(mls_train, sslm_cmcos_train, sslm_cmeuc_train, sslm_mfcos_train,
                                           sslm_mfeuc_train, midi_train)
@@ -649,8 +663,6 @@ def trainModel():
                                           sslm_mfeuc_train2, midi_train2)  # , stop=13)
     # valid_datagen = multi_input_generator(mls_val, sslm_cmcos_val, sslm_cmeuc_val, sslm_mfcos_val, sslm_mfeuc_val)
     # test_datagen = multi_input_generator(mls_test, sslm_cmcos_test, sslm_cmeuc_test, sslm_mfcos_test, sslm_mfeuc_test
-
-    print(next(train_datagen)[0][2].shape)
 
     steps_per_epoch = len(list(mls_train)) // batch_size
     steps_per_valid = len(list(mls_train2)) // batch_size  # mls_val
