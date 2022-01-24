@@ -33,7 +33,7 @@ from tensorflow.keras.regularizers import l2
 import seaborn as sns
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.utils import to_categorical
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, roc_curve, roc_auc_score, auc
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -67,10 +67,10 @@ import fnmatch
 from skimage.transform import resize
 
 k.set_image_data_format('channels_last')
-# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-gpus = tf.config.experimental.list_physical_devices('GPU')
-for gpu in gpus:
-    tf.config.experimental.set_memory_growth(gpu, True)
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+# gpus = tf.config.experimental.list_physical_devices('GPU')
+# for gpu in gpus:
+#     tf.config.experimental.set_memory_growth(gpu, True)
 
 if not sys.warnoptions:
     warnings.simplefilter("ignore")  # ignore warnings
@@ -100,6 +100,8 @@ TRAIN_LABELPATH = os.path.join(MASTER_LABELPATH, 'Train/')
 TRAIN2_LABELPATH = os.path.join(MASTER_LABELPATH, 'Train2/')
 TEST_LABELPATH = os.path.join(MASTER_LABELPATH, 'Test/')
 VAL_LABELPATH = os.path.join(MASTER_LABELPATH, 'Validate/')
+
+
 # endregion
 
 
@@ -370,6 +372,7 @@ def combine_generator(gen1, gen2):
     while True:
         yield next(gen1), next(gen2)
 
+
 # endregion
 
 
@@ -481,6 +484,8 @@ def buildValidationSet():
 
 
 """===================================================================================="""
+
+
 # region ModelDefinition
 
 
@@ -498,7 +503,7 @@ def formnn_midi(output_channels=32, lrval=0.0001, numclasses=12):
     w = layers.GlobalMaxPooling1D()(w)
     w = layers.Dense(output_channels * 8, activation='relu')(w)
     w = layers.Dropout(0.4)(w)
-    w = layers.Dense(numclasses, activation='sigmoid')(w)
+    w = layers.Dense(numclasses, activation='softmax')(w)
     w = keras.models.Model(inputs=inputC, outputs=w)
     return w
 
@@ -535,32 +540,34 @@ def formnn_pipeline(combined, output_channels=32, lrval=0.0001, numclasses=12):
     z = layers.Conv2D(filters=(output_channels * 2), kernel_size=(3, 5), strides=(1, 1),
                       padding='same', dilation_rate=(1, 3))(z)
     z = layers.LeakyReLU(alpha=lrval)(z)
-    z = layers.SpatialDropout2D(rate=0.5)(z)
+    z = layers.SpatialDropout2D(rate=0.3)(z)
     # z = layers.Reshape(target_shape=(-1, 1, output_channels * 152))(z)
     z = layers.Conv2D(filters=output_channels * 4, kernel_size=(1, 1), strides=(1, 1), padding='same')(z)
     z = layers.LeakyReLU(alpha=lrval)(z)
-    z = layers.SpatialDropout2D(rate=0.5)(z)
+    z = layers.SpatialDropout2D(rate=0.3)(z)
     z = layers.Conv2D(filters=output_channels * 8, kernel_size=(1, 1), strides=(1, 1), padding='same')(z)
     z = layers.LeakyReLU(alpha=lrval)(z)
     z = layers.GlobalMaxPooling2D()(z)
     # z = layers.Flatten()(z)
-    z = layers.Dense(numclasses, activation='sigmoid')(z)
+    z = layers.Dense(numclasses, activation='softmax')(z)
+    # Softmax -> Most likely class where sum(probabilities) = 1, Sigmoid -> Multiple likely classes, sum != 1
     return z
 
 
-def formnn_fuse(output_channels=32, lrval=0.00001, numclasses=12):
+def formnn_fuse(output_channels=32, lrval=0.0001, numclasses=12):
     cnn1_mel = formnn_mls(output_channels, lrval=lrval)
     cnn1_sslm = formnn_sslm(output_channels, lrval=lrval)
     combined = layers.concatenate([cnn1_mel.output, cnn1_sslm.output], axis=2)
     cnn2_in = formnn_pipeline(combined, output_channels, lrval=lrval, numclasses=numclasses)
-    opt = keras.optimizers.Adam(lr=lrval)
+    opt = keras.optimizers.Nadam(lr=lrval)
 
     imgmodel = keras.models.Model(inputs=[cnn1_mel.input, cnn1_sslm.input], outputs=[cnn2_in])
     midmodel = formnn_midi(output_channels, lrval=lrval, numclasses=numclasses)
     averageOut = layers.Average()([imgmodel.output, midmodel.output])
     model = keras.models.Model(inputs=[imgmodel.input[0], imgmodel.input[1], midmodel.input], outputs=averageOut)
 
-    model.compile(loss=keras.losses.BinaryCrossentropy(from_logits=True), optimizer=opt, metrics=['accuracy'])
+    model.compile(loss=['categorical_crossentropy'], optimizer=opt, metrics=['accuracy'])
+    # model.compile(loss=keras.losses.BinaryCrossentropy(from_logits=True), optimizer=opt, metrics=['accuracy'])
     model.summary()  # Try categorical_crossentropy, metrics=[tf.keras.metrics.Precision(), tf.keras.metrics.Recall()])
     if not os.path.isfile(os.path.join(MASTER_DIR, 'FormNN_Model_Diagram.png')):
         plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_Model_Diagram.png'),
@@ -575,33 +582,39 @@ def trainModel():
     batch_size = 1
 
     # region MODEL_DIRECTORIES
-    mls_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'MLS/'), label_path=TRAIN_LABELPATH, end=10,
+    mls_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'MLS/'), label_path=TRAIN_LABELPATH, end=15,
                                     transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
-    sslm_cmcos_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_COS/'), label_path=TRAIN_LABELPATH, end=10,
+    sslm_cmcos_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_COS/'), label_path=TRAIN_LABELPATH, end=15,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_cmeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_EUC/'), label_path=TRAIN_LABELPATH, end=10,
+    sslm_cmeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_EUC/'), label_path=TRAIN_LABELPATH, end=15,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_mfcos_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_COS/'), label_path=TRAIN_LABELPATH, end=10,
+    sslm_mfcos_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_COS/'), label_path=TRAIN_LABELPATH,
+                                           end=15,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    sslm_mfeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_EUC/'), label_path=TRAIN_LABELPATH, end=10,
+    sslm_mfeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_MFCC_EUC/'), label_path=TRAIN_LABELPATH,
+                                           end=15,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    midi_train = dus.BuildMIDIloader(os.path.join(TRAIN_DIR, 'MIDI/'), label_path=TRAIN_LABELPATH, end=10,
+    midi_train = dus.BuildMIDIloader(os.path.join(TRAIN_DIR, 'MIDI/'), label_path=TRAIN_LABELPATH, end=15,
                                      batch_size=batch_size)
 
     # """
-    mls_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'MLS/'), label_path=TRAIN2_LABELPATH,
+    mls_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'MLS/'), label_path=TRAIN2_LABELPATH, end=5,
                                      transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
     sslm_cmcos_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_CRM_COS/'), label_path=TRAIN2_LABELPATH,
+                                            end=5,
                                             transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
     sslm_cmeuc_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_CRM_EUC/'), label_path=TRAIN2_LABELPATH,
+                                            end=5,
                                             transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
     sslm_mfcos_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_MFCC_COS/'), label_path=TRAIN2_LABELPATH,
+                                            end=5,
                                             transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
     sslm_mfeuc_train2 = dus.BuildDataloader(os.path.join(TRAIN2_DIR, 'SSLM_MFCC_EUC/'), label_path=TRAIN2_LABELPATH,
+                                            end=5,
                                             transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
-    midi_train2 = dus.BuildMIDIloader(os.path.join(TRAIN2_DIR, 'MIDI/'), label_path=TRAIN2_LABELPATH,
+    midi_train2 = dus.BuildMIDIloader(os.path.join(TRAIN2_DIR, 'MIDI/'), label_path=TRAIN2_LABELPATH, end=5,
                                       batch_size=batch_size)
-    # """
+    """
 
     mls_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'MLS/'), label_path=VAL_LABELPATH,
                                   transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
@@ -614,7 +627,7 @@ def trainModel():
     sslm_mfeuc_val = dus.BuildDataloader(os.path.join(VAL_DIR, 'SSLM_MFCC_EUC/'), label_path=VAL_LABELPATH,
                                          transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
 
-    """
+    "" "
     mls_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'MLS/'), label_path=TEST_LABELPATH,
                                    transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
     sslm_cmcos_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'SSLM_CRM_COS/'), label_path=TEST_LABELPATH,
@@ -626,6 +639,7 @@ def trainModel():
     sslm_mfeuc_test = dus.BuildDataloader(os.path.join(TEST_DIR, 'SSLM_MFCC_EUC/'), label_path=TEST_LABELPATH,
                                           transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
     """
+
     # endregion
 
     def multi_input_generator_helper(gen1, gen2, gen3, gen4, mlsshape):
@@ -638,8 +652,6 @@ def trainModel():
             sslm3 = resize(sslm3, (max(mlsshape[0], sslm3.shape[0]), max(mlsshape[1], sslm3.shape[1])))
             sslm4 = next(gen4)[0]
             sslm4 = resize(sslm4, (max(mlsshape[0], sslm4.shape[0]), max(mlsshape[1], sslm4.shape[1])))
-            # yield sslm1.shape, [sslm1, sslm2, sslm3, sslm4]
-            # """
             yield sslm1.shape, tf.expand_dims(
                 np.concatenate((sslm1,
                                 np.concatenate((sslm2,
@@ -669,12 +681,12 @@ def trainModel():
     label_encoder = LabelEncoder()
     label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))  # len(label_encoder.classes_) for nn
 
-    trmodel = formnn_fuse(output_channels=32, lrval=0.00001, numclasses=12)  # 'val_loss' or val_accuracy
+    model = formnn_fuse(output_channels=32, lrval=0.000001, numclasses=mls_train.getNumClasses())  # Try 'val_loss'?
     checkpoint = ModelCheckpoint(os.path.join(MASTER_DIR, 'best_formNN_model.hdf5'), monitor='val_accuracy', verbose=0,
                                  save_best_only=True, mode='max', save_freq='epoch', save_weights_only=True)
-    model_history = trmodel.fit(train_datagen, epochs=10, verbose=1, validation_data=valid_datagen,
-                                shuffle=False, callbacks=[checkpoint], batch_size=batch_size,
-                                steps_per_epoch=steps_per_epoch, validation_steps=steps_per_valid)
+    model_history = model.fit(train_datagen, epochs=10, verbose=1, validation_data=valid_datagen,
+                              shuffle=False, callbacks=[checkpoint], batch_size=batch_size,
+                              steps_per_epoch=steps_per_epoch, validation_steps=steps_per_valid)
 
     print("Training complete!\n")
 
@@ -701,27 +713,7 @@ def trainModel():
     # pd.DataFrame(model_history.history).plot()  # figsize=(8, 5)
     # plt.show()
 
-    """
-    plt.plot(model_history.history['precision'])
-    plt.plot(model_history.history['val_precision'])
-    plt.title('Model Precision')
-    plt.ylabel('Precision')
-    plt.xlabel('Epoch')
-    plt.legend(['Train', 'Test'], loc='upper left')
-    plt.savefig('Initial_Model_Precision.png')
-    plt.show()
-
-    plt.plot(model_history.history['recall'])
-    plt.plot(model_history.history['val_recall'])
-    plt.title('Model Recall')
-    plt.ylabel('Recall')
-    plt.xlabel('Epoch')
-    plt.legend(['Train', 'Test'], loc='upper left')
-    plt.savefig('Initial_Model_Recall.png')
-    plt.show()
-    """
-
-    predictions = trmodel.predict_generator(train_datagen, steps=1, verbose=1, workers=0)
+    predictions = model.predict_generator(train_datagen, steps=1, verbose=1, workers=0)
     print(predictions)
     print("Prediction complete!")
 
@@ -736,7 +728,38 @@ def trainModel():
     # print(classification_report(y_test, y_pred_bool))
     """
 
+    predictions = model.predict(valid_datagen, steps=len(list(mls_train2)), verbose=1)
+    predictions = predictions.argmax(axis=1)
+    predictions = predictions.astype(int).flatten()
+    predictions = (label_encoder.inverse_transform(predictions))
+    predictions = pd.DataFrame({'Predicted Values': predictions})
+
+    actual = mls_train2.getLabels().numpy().argmax(axis=1)
+    actual = actual.astype(int).flatten()
+    actual = (label_encoder.inverse_transform(actual))
+    oldactual = actual
+    actual = pd.DataFrame({'Actual Values': actual})
+
+    cm = confusion_matrix(actual, predictions)
+    plt.figure(figsize=(12, 10))
+    cm = pd.DataFrame(cm, index=[i for i in label_encoder.classes_[0:mls_train2.getNumClasses()]],
+                      columns=[i for i in label_encoder.classes_[0:mls_train2.getNumClasses()]])
+    ax = sns.heatmap(cm, linecolor='white', cmap='Blues', linewidth=1, annot=True, fmt='')
+    bottom, top = ax.get_ylim()
+    ax.set_ylim(bottom + 0.5, top - 0.5)
+    plt.title('Confusion Matrix', size=20)
+    plt.xlabel('Predicted Labels', size=14)
+    plt.ylabel('Actual Labels', size=14)
+    plt.savefig('Initial_Model_Confusion_Matrix.png')
+    plt.show()
+    clf_report = classification_report(actual, predictions, output_dict=True,
+                                       target_names=[i for i in label_encoder.classes_[0:mls_train2.getNumClasses()]])
+    print(clf_report)
+    sns.heatmap(pd.DataFrame(clf_report).iloc[:, :].T, annot=True, cmap='viridis')
+    plt.show()
+
     # TODO: create a dense model (RNN?) that uses the audio data to classify the peaks
+    # https://towardsdatascience.com/10-minutes-to-building-a-cnn-binary-image-classifier-in-tensorflow-4e216b2034aa
     # Use spectral centroids, https://musicinformationretrieval.com/spectral_features.html
 
 

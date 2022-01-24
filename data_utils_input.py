@@ -472,6 +472,12 @@ class BuildDataloader(k.utils.Sequence):
         self.n += 1
         return result
 
+    def getNumClasses(self):
+        return len(self.labels_form_list[1])
+
+    def getLabels(self):
+        return self.labels_form_list
+
 
 # Load MIDI Data
 class BuildMIDIloader(k.utils.Sequence):
