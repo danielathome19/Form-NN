@@ -210,7 +210,7 @@ def create_mls_sslm(filename, name="", foldername="", filepath=DEFAULT_FILEPATH)
     print("Epsilon matrix dimensions are: [N/p, L/p] (with L in frames)")
     print("Epsilon matrix dimensions are: [", epsilon.shape[0], ",", epsilon.shape[1], "]")
 
-    # Removing initial padding now taking into account the max-poolin factor
+    # Removing initial padding now taking into account the max-pooling factor
     distances = distances[padding_factor // p:, :]
     epsilon = epsilon[padding_factor // p:, :]
     x_prime = x_prime[:, padding_factor // p:]

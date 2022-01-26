@@ -10,6 +10,7 @@ from scipy.spatial import distance
 import pandas as pd
 import tensorflow.keras as k
 import data_utils as du
+from skimage.transform import resize
 import tensorflow as tf
 import matplotlib.pyplot as plt
 
@@ -178,7 +179,7 @@ L_near = round(L_sec_near * sr_desired / hop_length)  # conversion of lag L seco
 
 MASTER_DIR = 'D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis/'
 DEFAULT_LABELPATH = os.path.join(MASTER_DIR, 'Labels/')
-TRAIN_DIR = 'D:/Master Thesis Input/Train/'
+TRAIN_DIR = 'D:/Master Thesis Input/NewTrain/'
 MIDI_DIR = os.path.join(MASTER_DIR, 'Data/MIDIs/')
 
 
@@ -207,6 +208,11 @@ def util_main(feature, mode="cos"):
         for file in os.listdir(folder):
             # foldername = folder.split('\\')[-1]
             name_song, name = file, file.split('/')[-1].split('.')[0]
+
+            # if "x" not in name:
+            #     continue
+            # print(name)
+
             start_time_song = time.time()
             i += 1
             song_id = name_song[:-4]  # delete .ext characters from the string
@@ -271,6 +277,39 @@ def util_main(feature, mode="cos"):
                 print("\t\tAlready completed. Skipping...\n\t\tFinished", i, "/", num_songs)
             # return
     print("All files have been converted. Duration: {:.2f}s".format(time.time() - start_time))
+
+
+def validate_folder_contents(labels, midis, mlsdir, sslm1, sslm2, sslm3, sslm4):
+    """Ensure all folders contain files of the same name"""
+    labelfiles = os.listdir(labels)
+    midifiles = os.listdir(midis)
+    mlsfiles = os.listdir(mlsdir)
+    sslm1files = os.listdir(sslm1)
+    sslm2files = os.listdir(sslm2)
+    sslm3files = os.listdir(sslm3)
+    sslm4files = os.listdir(sslm4)
+
+    for i in range(len(labelfiles)):
+        c_lbl = os.path.splitext(labelfiles[i])[0]
+        c_midi = os.path.splitext(midifiles[i])[0]
+        c_mls = os.path.splitext(mlsfiles[i])[0]
+        c_sslm1 = os.path.splitext(sslm1files[i])[0]
+        c_sslm2 = os.path.splitext(sslm2files[i])[0]
+        c_sslm3 = os.path.splitext(sslm3files[i])[0]
+        c_sslm4 = os.path.splitext(sslm4files[i])[0]
+
+        if c_lbl != c_midi or c_lbl != c_mls or\
+                c_lbl != c_sslm1 or c_lbl != c_sslm2 or c_lbl != c_sslm3 or c_lbl != c_sslm4:
+            err = FileNotFoundError("File discrepency at index " + str(i))
+            print("Current labels: ")
+            print(f"Label: {c_lbl}\nMIDI: {c_midi}\nMLS: {c_mls}\nSSLM-CRM-COS: {c_sslm1}"
+                  f"\nSSLM-CRM-EUC: {c_sslm2}\nSSLM-MFCC-COS: {c_sslm3}\nSSLM-MFCC-EUC: {c_sslm4}")
+            raise err
+
+    if len(labelfiles) != len(midifiles) or len(labelfiles) != len(mlsfiles) or \
+            len(labelfiles) != len(sslm1files) or len(labelfiles) != len(sslm2files) or\
+            len(labelfiles) != len(sslm3files) or len(labelfiles) != len(sslm4files):
+        raise ValueError("Not all directories contain the same number of files")
 
 
 # region Transformations
@@ -398,12 +437,16 @@ class BuildDataloader(k.utils.Sequence):
         for (im_dirpath, im_dirnames, im_filenames) in os.walk(self.images_path):
             for f in im_filenames:
                 if f.endswith('.npy'):
+                    if "variations_in_f_1793_(c)iscenk" in f or "dvoraktheme_and_variations_36_(c)yogore" in f or "Sonata_No_8_1st_Movement_K_310" in f:
+                        continue
                     self.songs_list.append(os.path.splitext(f)[0])
                     # print("Reading file #" + str(cnt))
                     img_path = im_dirpath + f
-                    image = np.load(img_path)
-                    # plt.imshow(img_path)  # View image
-                    # plt.show()
+                    image = np.load(img_path, allow_pickle=True)
+                    if image.ndim == 1:
+                        print("Erroneous file:", img_path, "Shape:", image.shape, image.ndim)
+                    else:
+                        image = resize(image, (500, 500))
                     self.images_list.append(image)
                     cnt += 1
                     if end != -1:
@@ -478,6 +521,18 @@ class BuildDataloader(k.utils.Sequence):
     def getLabels(self):
         return self.labels_form_list
 
+    def getImages(self):
+        return self.images_list
+
+    def getCurrentIndex(self):
+        return self.n
+
+    def getSong(self, index):
+        return self.songs_list[index]
+
+    def getFormLabel(self, index):
+        return self.labels_form_list[index]
+
 
 # Load MIDI Data
 class BuildMIDIloader(k.utils.Sequence):
@@ -498,9 +553,12 @@ class BuildMIDIloader(k.utils.Sequence):
         for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(self.midi_path):
             for f in mid_filenames:
                 if f.endswith('.mid') or f.endswith('.midi'):
+                    if "variations_in_f_1793_(c)iscenk" in f or "dvoraktheme_and_variations_36_(c)yogore" in f or "Sonata_No_8_1st_Movement_K_310" in f:
+                        continue
                     self.songs_list.append(os.path.splitext(f)[0])
                     # print("Reading file #" + str(cnt))
                     mid_path = mid_dirpath + f
+                    # print("Working on file: " + f)
                     X, sample_rate = librosa.load(mid_path, res_type='kaiser_fast', duration=3, sr=44100, offset=0.5)
                     contrast = librosa.feature.spectral_contrast(y=X, sr=sample_rate)
                     """ Plot spectral contrast
