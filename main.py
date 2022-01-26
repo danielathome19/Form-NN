@@ -691,7 +691,7 @@ def trainModel():
               f"{mls_train.getNumClasses()} vs. {mls_val.getNumClasses()} vs. {mls_test.getNumClasses()}")
 
     model = formnn_fuse(output_channels=32, lrval=0.000001, numclasses=mls_train.getNumClasses())  # Try 'val_loss'?
-    model.load_weights('best_initial_model.hdf5')
+    # model.load_weights('best_initial_model.hdf5')
     checkpoint = ModelCheckpoint(os.path.join(MASTER_DIR, 'best_formNN_model.hdf5'), monitor='val_accuracy', verbose=0,
                                  save_best_only=True, mode='max', save_freq='epoch', save_weights_only=True)
     model_history = model.fit(train_datagen, epochs=10, verbose=1, validation_data=valid_datagen,
