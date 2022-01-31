@@ -13,6 +13,7 @@ import data_utils as du
 from skimage.transform import resize
 import tensorflow as tf
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import LabelEncoder
 
 start_time = time.time()
 
@@ -179,7 +180,7 @@ L_near = round(L_sec_near * sr_desired / hop_length)  # conversion of lag L seco
 
 MASTER_DIR = 'D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis/'
 DEFAULT_LABELPATH = os.path.join(MASTER_DIR, 'Labels/')
-TRAIN_DIR = 'D:/Master Thesis Input/NewTrain/'
+TRAIN_DIR = 'F:/Master Thesis Input/NewTrain/'
 MIDI_DIR = os.path.join(MASTER_DIR, 'Data/MIDIs/')
 
 
@@ -437,8 +438,9 @@ class BuildDataloader(k.utils.Sequence):
         for (im_dirpath, im_dirnames, im_filenames) in os.walk(self.images_path):
             for f in im_filenames:
                 if f.endswith('.npy'):
-                    if "variations_in_f_1793_(c)iscenk" in f or "dvoraktheme_and_variations_36_(c)yogore" in f or "Sonata_No_8_1st_Movement_K_310" in f:
-                        continue
+                    if "variations_in_f_1793_(c)iscenk" in f or "dvoraktheme_and_variations_36_(c)yogore" \
+                            in f or "Sonata_No_8_1st_Movement_K_310" in f:
+                        continue  # TODO: remove (fix datafiles)
                     self.songs_list.append(os.path.splitext(f)[0])
                     # print("Reading file #" + str(cnt))
                     img_path = im_dirpath + f
@@ -446,7 +448,8 @@ class BuildDataloader(k.utils.Sequence):
                     if image.ndim == 1:
                         print("Erroneous file:", img_path, "Shape:", image.shape, image.ndim)
                     else:
-                        image = resize(image, (500, 500))
+                        image = resize(image, (500, 750))
+                        # image = (image - image.mean()) / (image.std() + 1e-8)
                     self.images_list.append(image)
                     cnt += 1
                     if end != -1:
@@ -534,6 +537,7 @@ class BuildDataloader(k.utils.Sequence):
         return self.labels_form_list[index]
 
 
+# TODO: Save all transformed data into one large npy file [mls, {sslm1, 2, 3, 4}, midi], [labelphrase, sec, form, name]
 # Load MIDI Data
 class BuildMIDIloader(k.utils.Sequence):
     def __init__(self, midi_path, label_path=DEFAULT_LABELPATH, transforms=None, batch_size=32, end=-1):
@@ -553,8 +557,9 @@ class BuildMIDIloader(k.utils.Sequence):
         for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(self.midi_path):
             for f in mid_filenames:
                 if f.endswith('.mid') or f.endswith('.midi'):
-                    if "variations_in_f_1793_(c)iscenk" in f or "dvoraktheme_and_variations_36_(c)yogore" in f or "Sonata_No_8_1st_Movement_K_310" in f:
-                        continue
+                    if "variations_in_f_1793_(c)iscenk" in f or \
+                            "dvoraktheme_and_variations_36_(c)yogore" in f or "Sonata_No_8_1st_Movement_K_310" in f:
+                        continue  # TODO: remove (fix datafiles)
                     self.songs_list.append(os.path.splitext(f)[0])
                     # print("Reading file #" + str(cnt))
                     mid_path = mid_dirpath + f

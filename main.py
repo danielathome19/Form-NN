@@ -44,6 +44,7 @@ from sklearn.dummy import DummyClassifier
 from tensorflow.keras.utils import to_categorical
 from keras.utils import np_utils
 from pydub import AudioSegment
+import random
 import tensorflow.keras.layers as kl
 import tensorflow.keras.applications as ka
 import tensorflow.keras.optimizers as ko
@@ -65,9 +66,13 @@ from data_utils_input import normalize_image, padding_MLS, padding_SSLM, borders
 from keras import backend as k
 from shutil import copyfile
 import fnmatch
+import hyperas
+from hyperopt import Trials, STATUS_OK, tpe
+from hyperas.distributions import choice, uniform
 from skimage.transform import resize
 
 k.set_image_data_format('channels_last')
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 gpus = tf.config.experimental.list_physical_devices('GPU')
 for gpu in gpus:
@@ -79,7 +84,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # region Directories
 MASTER_DIR = 'D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis/'
-MASTER_INPUT_DIR = 'D:/Master Thesis Input/'
+MASTER_INPUT_DIR = 'F:/Master Thesis Input/'
 MASTER_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/')
 
 MIDI_Data_Dir = np.array(gb.glob(os.path.join(MASTER_DIR, 'Data/MIDIs/*')))
@@ -251,7 +256,7 @@ def prepare_train_data():
 
             fullfilename = folder + '/' + filename
             du.create_mls_sslm(fullfilename, name, foldername)
-            du.create_mls_sslm2(fullfilename, name, foldername)
+            du.peak_picking(fullfilename, name, foldername)
             cnt += 1
 
 
@@ -368,8 +373,6 @@ def old_trainModel():
 def combine_generator(gen1, gen2):
     while True:
         yield next(gen1), next(gen2)
-
-
 # endregion
 
 
@@ -410,6 +413,21 @@ def get_total_duration():
     # Total duration: 72869.0 seconds
     # = 1214.4833 minutes = 20.241389 hours = 20 hours, 14 minutes, 29 seconds
     return dur_sum
+
+
+def get_class_weights(labels, one_hot=False):
+    if one_hot is False:
+        n_classes = max(labels) + 1
+    else:
+        n_classes = len(labels[0])
+    class_counts = [0 for _ in range(int(n_classes))]
+    if one_hot is False:
+        for label in labels:
+            class_counts[label] += 1
+    else:
+        for label in labels:
+            class_counts[np.where(label == 1)[0][0]] += 1
+    return {i: (1. / class_counts[i]) * float(len(labels)) / float(n_classes) for i in range(int(n_classes))}
 
 
 def prepare_model_training_input():
@@ -527,7 +545,7 @@ def findBestShape(mls_train, sslm_train):
 
 # region ModelDefinition
 # MIDI MODEL -- Try switching activation to ELU instead of RELU. Mimic visual/aural analysis using ensemble method
-def formnn_midi(output_channels=32, lrval=0.0001, numclasses=12):
+def formnn_midi(output_channels=32, numclasses=12):
     inputC = layers.Input(shape=(None, 1))
     w = layers.Conv1D(output_channels * 2, kernel_size=10, activation='relu', input_shape=(None, 1))(inputC)
     w = layers.Conv1D(output_channels * 4, kernel_size=10, activation='relu', kernel_regularizer=l2(0.01),
@@ -540,16 +558,60 @@ def formnn_midi(output_channels=32, lrval=0.0001, numclasses=12):
     w = layers.GlobalMaxPooling1D()(w)
     w = layers.Dense(output_channels * 8, activation='relu')(w)
     w = layers.Dropout(0.4)(w)
-    w = layers.Dense(numclasses, activation='softmax')(w)
+    w = layers.Dense(numclasses)(w)
+    w = layers.Softmax()(w)
     w = keras.models.Model(inputs=inputC, outputs=w)
     return w
+
+
+def formnn_mls2(output_channels=32, lrval=0.0001):
+    inputA = layers.Input(batch_input_shape=(None, None, None, 1))
+    x = layers.Conv2D(filters=output_channels, kernel_size=(5, 7), padding='same',
+                      kernel_regularizer=l2(0.01), bias_regularizer=l2(0.01), activation='relu')(inputA)
+    x = layers.MaxPooling2D(pool_size=(5, 3), strides=(5, 1), padding='same')(x)
+    x = keras.models.Model(inputs=inputA, outputs=x)
+    return x
+
+
+def formnn_sslm2(output_channels=32, lrval=0.0001):
+    inputB = layers.Input(batch_input_shape=(None, None, None, 1))  # (None, None, None, 4)
+    y = layers.Conv2D(filters=output_channels, kernel_size=(5, 7), padding='same',
+                      kernel_regularizer=l2(0.01), bias_regularizer=l2(0.01), activation='relu')(inputB)
+    y = layers.MaxPooling2D(pool_size=(5, 3), strides=(5, 1), padding='same')(y)
+    y = layers.AveragePooling2D(pool_size=(1, 4))(y)
+    y = keras.models.Model(inputs=inputB, outputs=y)
+    return y
+
+
+def formnn_pipeline2(combined, output_channels=32, lrval=0.0001, numclasses=12):
+    z = layers.Conv2D(filters=(output_channels * 2), kernel_size=(3, 5),
+                      padding='same', dilation_rate=(1, 3), kernel_regularizer=l2(0.01),
+                      bias_regularizer=l2(0.01), activation='relu')(combined)
+    z = layers.Conv2D(filters=output_channels * 4, kernel_size=(1, 1), padding='same',
+                      kernel_regularizer=l2(0.01), bias_regularizer=l2(0.01), activation='relu')(z)
+    z = layers.MaxPooling2D(pool_size=3)(z)
+    z = layers.SpatialDropout2D(rate=0.3)(z)
+    z = layers.Conv2D(filters=output_channels * 4, kernel_size=(1, 1), padding='same',
+                      kernel_regularizer=l2(0.01), bias_regularizer=l2(0.01), activation='relu')(z)
+    z = layers.MaxPooling2D(pool_size=3)(z)
+    z = layers.SpatialDropout2D(rate=0.3)(z)
+    z = layers.GlobalMaxPooling2D()(z)
+    # z = layers.Dense(output_channels * 8, activation='relu')(z)
+    # z = layers.Dropout(rate=0.3)(z)
+    z = layers.Dense(numclasses)(z)
+    z = layers.Softmax()(z)
+    return z
+
+
+"""=======================ORIGINAL MODEL======================="""
 
 
 # MLS MODEL
 def formnn_mls(output_channels=32, lrval=0.0001):
     inputA = layers.Input(batch_input_shape=(None, None, None, 1))
     x = layers.ZeroPadding2D(padding=((2, 2), (3, 3)))(inputA)
-    x = layers.Conv2D(filters=output_channels, kernel_size=(5, 7), strides=(1, 1), padding='same')(x)
+    x = layers.Conv2D(filters=output_channels, kernel_size=(5, 7), strides=(1, 1), padding='same', kernel_regularizer=l2(0.01),
+                      bias_regularizer=l2(0.01))(x)
     x = layers.LeakyReLU(alpha=lrval)(x)
     x = layers.ZeroPadding2D(padding=((1, 1), (1, 1)))(x)
     x = layers.MaxPooling2D(pool_size=(5, 3), strides=(5, 1), padding='same')(x)
@@ -561,7 +623,8 @@ def formnn_mls(output_channels=32, lrval=0.0001):
 def formnn_sslm(output_channels=32, lrval=0.0001):
     inputB = layers.Input(batch_input_shape=(None, None, None, 1))  # (None, None, None, 4)
     y = layers.ZeroPadding2D(padding=((2, 2), (3, 3)))(inputB)
-    y = layers.Conv2D(filters=output_channels, kernel_size=(5, 7), strides=(1, 1), padding='same')(y)
+    y = layers.Conv2D(filters=output_channels, kernel_size=(5, 7), strides=(1, 1), padding='same', kernel_regularizer=l2(0.01),
+                      bias_regularizer=l2(0.01))(y)
     y = layers.LeakyReLU(alpha=lrval)(y)
     y = layers.ZeroPadding2D(padding=((1, 1), (1, 1)))(y)
     y = layers.MaxPooling2D(pool_size=(5, 3), strides=(5, 1), padding='same')(y)
@@ -574,31 +637,37 @@ def formnn_sslm(output_channels=32, lrval=0.0001):
 def formnn_pipeline(combined, output_channels=32, lrval=0.0001, numclasses=12):
     z = layers.ZeroPadding2D(padding=((1, 1), (6, 6)))(combined)
     z = layers.Conv2D(filters=(output_channels * 2), kernel_size=(3, 5), strides=(1, 1),
-                      padding='same', dilation_rate=(1, 3))(z)
+                      padding='same', dilation_rate=(1, 3), kernel_regularizer=l2(0.01),
+                      bias_regularizer=l2(0.01))(z)
     z = layers.LeakyReLU(alpha=lrval)(z)
-    z = layers.SpatialDropout2D(rate=0.5)(z)
+    z = layers.SpatialDropout2D(rate=0.3)(z)
     # z = layers.Reshape(target_shape=(-1, 1, output_channels * 152))(z)
-    z = layers.Conv2D(filters=output_channels * 4, kernel_size=(1, 1), strides=(1, 1), padding='same')(z)
+    z = layers.Conv2D(filters=output_channels * 4, kernel_size=(1, 1), strides=(1, 1), padding='same', kernel_regularizer=l2(0.01),
+                      bias_regularizer=l2(0.01))(z)
     z = layers.LeakyReLU(alpha=lrval)(z)
-    z = layers.SpatialDropout2D(rate=0.5)(z)
-    z = layers.Conv2D(filters=output_channels * 8, kernel_size=(1, 1), strides=(1, 1), padding='same')(z)
+    #z = layers.SpatialDropout2D(rate=0.5)(z)
+    z = layers.Conv2D(filters=output_channels * 8, kernel_size=(1, 1), strides=(1, 1), padding='same', kernel_regularizer=l2(0.01),
+                      bias_regularizer=l2(0.01))(z)
     z = layers.LeakyReLU(alpha=lrval)(z)
     z = layers.GlobalAveragePooling2D()(z)
     # z = layers.Flatten()(z)
-    z = layers.Dense(numclasses, activation='softmax')(z)
+    z = layers.Dense(numclasses)(z)
+    z = layers.Softmax()(z)
     # Softmax -> Most likely class where sum(probabilities) = 1, Sigmoid -> Multiple likely classes, sum != 1
     return z
 
 
 def formnn_fuse(output_channels=32, lrval=0.0001, numclasses=12):
-    cnn1_mel = formnn_mls(output_channels, lrval=lrval)
-    cnn1_sslm = formnn_sslm(output_channels, lrval=lrval)
+    cnn1_mel = formnn_mls2(output_channels, lrval=lrval)
+    cnn1_sslm = formnn_sslm2(output_channels, lrval=lrval)
     combined = layers.concatenate([cnn1_mel.output, cnn1_sslm.output], axis=2)
-    cnn2_in = formnn_pipeline(combined, output_channels, lrval=lrval, numclasses=numclasses)
-    opt = keras.optimizers.SGD(lr=lrval, decay=1e-6, momentum=0.9, nesterov=True)
+    cnn2_in = formnn_pipeline2(combined, output_channels, lrval=lrval, numclasses=numclasses)
+    # opt = keras.optimizers.SGD(lr=lrval, decay=1e-6, momentum=0.9, nesterov=True)
+    opt = keras.optimizers.Adam(lr=lrval, epsilon=1e-6)
 
+    # TODO: make simpler model, got better accuracy from removing ZeroPadding and Conv layers
     imgmodel = keras.models.Model(inputs=[cnn1_mel.input, cnn1_sslm.input], outputs=[cnn2_in])
-    midmodel = formnn_midi(output_channels, lrval=lrval, numclasses=numclasses)
+    midmodel = formnn_midi(output_channels, numclasses=numclasses)
     averageOut = layers.Average()([imgmodel.output, midmodel.output])
     model = keras.models.Model(inputs=[imgmodel.input[0], imgmodel.input[1], midmodel.input], outputs=averageOut)
 
@@ -612,13 +681,12 @@ def formnn_fuse(output_channels=32, lrval=0.0001, numclasses=12):
 # endregion
 
 
-def trainModel():
+def trainFormModel():
     batch_size = 10
 
     # region MODEL_DIRECTORIES
     mls_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'MLS/'), label_path=TRAIN_LABELPATH,  # end=90,
                                     transforms=[padding_MLS, normalize_image, borders], batch_size=batch_size)
-
     sslm_cmcos_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_COS/'), label_path=TRAIN_LABELPATH,
                                            transforms=[padding_SSLM, normalize_image, borders], batch_size=batch_size)
     sslm_cmeuc_train = dus.BuildDataloader(os.path.join(TRAIN_DIR, 'SSLM_CRM_EUC/'), label_path=TRAIN_LABELPATH,
@@ -668,7 +736,7 @@ def trainModel():
                                                 np.concatenate((sslm3, sslm4),
                                                                axis=-1)), axis=-1)), axis=-1), axis=-1)
 
-    def multi_input_generator(gen1, gen2, gen3, gen4, gen5, gen6, stop=-1, feature=2):
+    def multi_input_generator(gen1, gen2, gen3, gen4, gen5, gen6, feature=2):
         while True:
             mlsgen = next(gen1)
             sslmimgs = next(multi_input_generator_helper(gen2, gen3, gen4, gen5))
@@ -682,20 +750,36 @@ def trainModel():
                                          sslm_cmcos_test, sslm_cmeuc_test, sslm_mfcos_test, sslm_mfeuc_test, midi_test)
 
     steps_per_epoch = len(list(mls_train)) // batch_size
-    steps_per_valid = len(list(mls_val)) // batch_size  # mls_val
+    steps_per_valid = len(list(mls_val)) // batch_size
     label_encoder = LabelEncoder()
-    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))  # len(label_encoder.classes_) for nn
+    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
 
     if mls_train.getNumClasses() != mls_val.getNumClasses() or mls_train.getNumClasses() != mls_test.getNumClasses():
         print(f"Train and validation or testing datasets have differing numbers of classes: "
               f"{mls_train.getNumClasses()} vs. {mls_val.getNumClasses()} vs. {mls_test.getNumClasses()}")
 
-    model = formnn_fuse(output_channels=32, lrval=0.000001, numclasses=mls_train.getNumClasses())  # Try 'val_loss'?
+    classweights = get_class_weights(mls_train.getLabels().numpy().squeeze(axis=-1), one_hot=True)
+    """
+    # Show class weights as bar graph
+    barx, bary = zip(*sorted(classweights.items()))
+    plt.figure(figsize=(12, 8))
+    plt.bar(label_encoder.inverse_transform(barx), bary, color='green')
+    for i in range(len(barx)):
+        plt.text(i, bary[i]//2, round(bary[i], 3), ha='center', color='white')
+    plt.title('Train Class Weights')
+    plt.ylabel('Weight')
+    plt.xlabel('Class')
+    plt.savefig('Initial_Model_Class_Weights.png')
+    plt.show()
+    """
+
+    model = formnn_fuse(output_channels=32, lrval=0.00005, numclasses=mls_train.getNumClasses())  # Try 'val_loss'?
     # model.load_weights('best_initial_model.hdf5')
+    early_stopping = EarlyStopping(patience=5, verbose=5, mode="auto")
     checkpoint = ModelCheckpoint(os.path.join(MASTER_DIR, 'best_formNN_model.hdf5'), monitor='val_accuracy', verbose=0,
                                  save_best_only=True, mode='max', save_freq='epoch', save_weights_only=True)
-    model_history = model.fit(train_datagen, epochs=10, verbose=1, validation_data=valid_datagen,
-                              shuffle=False, callbacks=[checkpoint], batch_size=batch_size,
+    model_history = model.fit(train_datagen, epochs=100, verbose=1, validation_data=valid_datagen, shuffle=False,
+                              callbacks=[checkpoint, early_stopping], batch_size=batch_size,  #class_weight=classweights
                               steps_per_epoch=steps_per_epoch, validation_steps=steps_per_valid)
 
     print("Training complete!\n")
@@ -727,12 +811,16 @@ def trainModel():
     print(predictions)
     print("Prediction complete!")
     inverted = label_encoder.inverse_transform([np.argmax(predictions[0, :])])
-    print(inverted)
+    print("Predicted: ", end="")
+    print(inverted, end=""),
+    print("\tActual: ", end="")
+    print(label_encoder.inverse_transform([np.argmax(mls_val.getFormLabel(mls_val.getCurrentIndex()-1))]))
     print("Name: " + mls_val.getSong(mls_val.getCurrentIndex()-1))
 
-    print("Evaluating...")
+    print("\nEvaluating...")
     score = model.evaluate_generator(test_datagen, steps=len(list(mls_test)), verbose=1)
-    print("Prediction complete!\nScore:", score)
+    print("Evaluation complete!\nScore:")
+    print(f"Loss: {score[0]}\tAccuracy: {score[1]}")
 
     # region EvaluationGraphs
     predictions = model.predict(test_datagen, steps=len(list(mls_test)), verbose=1)
@@ -758,19 +846,109 @@ def trainModel():
     plt.ylabel('Actual Labels', size=14)
     plt.savefig('Initial_Model_Confusion_Matrix.png')
     plt.show()
-    clf_report = classification_report(actual, predictions, output_dict=True,  # TODO: Test set
+    clf_report = classification_report(actual, predictions, output_dict=True,
                                        target_names=[i for i in label_encoder.classes_[0:mls_test.getNumClasses()]])
-    print(clf_report)
     sns.heatmap(pd.DataFrame(clf_report).iloc[:, :].T, annot=True, cmap='viridis')
+    plt.title('Classification Report', size=20)
+    plt.savefig('Initial_Model_Classification_Report.png')
     plt.show()
     # endregion
+
+    # Measure confidence level? Prediction Interval (PI)
+    # https://medium.com/hal24k-techblog/how-to-generate-neural-network-confidence-intervals-with-keras-e4c0b78ebbdf
+
+    # TODO: feed duration into model to see if it can detect a difference by length?
+    # https://github.com/philipperemy/keract#display-the-activations-as-a-heatmap-overlaid-on-an-image
+    # Check out humdrum dataset https://www.humdrum.org/
+    # Josh Albrecht? https://www.kent.edu/music/joshua-albrecht
+    # Publish in Society for Music Theorists? SMT - Due mid-Feb., conference in Nov.
 
     # TODO: create a dense model (RNN?) that uses the audio data to classify the peaks
     # https://towardsdatascience.com/10-minutes-to-building-a-cnn-binary-image-classifier-in-tensorflow-4e216b2034aa
     # Use spectral centroids, https://musicinformationretrieval.com/spectral_features.html
+    # Use novelty function for each song, save array of predicted peaks using np.save and load
 
 
-# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+def formnn_lstm(n_timesteps, mode='concat'):  # Try 'ave', 'mul', and 'sum' also
+    model = Sequential()
+    model.add(layers.Bidirectional(
+        layers.LSTM(20, return_sequences=True), input_shape=(n_timesteps, 1), merge_mode=mode))
+    model.add(layers.TimeDistributed(
+        layers.Dense(1, activation='sigmoid')))
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
+
+
+def get_sequence(n_timesteps):
+    # create a sequence of random numbers in [0,1]
+    X = np.array([random.random() for _ in range(n_timesteps)])
+    # calculate cut-off value to change class values
+    limit = n_timesteps/4.0
+    # determine the class outcome for each item in cumulative sequence
+    y = np.array([0 if x < limit else 1 for x in np.cumsum(X)])
+    # reshape input and output data to be suitable for LSTMs
+    # print(X) [0.436576 0.35750063 0.41489899 0.19143477 0.01814592 0.89638702 0.01744344 0.63694126 0.614542 0.623846]
+    # print(y) [0 0 0 0 0 0 0 1 1 1]
+    X = X.reshape(1, n_timesteps, 1)  # from (10,) to (1, 10, 1)
+    y = y.reshape(1, n_timesteps, 1)
+    return X, y
+
+
+def train_model(model, n_timesteps):
+    loss = list()
+    # early_stopping = EarlyStopping(patience=5, verbose=5, mode="auto")  # Does not work without validation set
+    # checkpoint = ModelCheckpoint(os.path.join(MASTER_DIR, 'best_formNN_label_model.hdf5'), monitor='val_accuracy',
+    #                             verbose=0, save_best_only=True, mode='max', save_freq='epoch', save_weights_only=True)
+    for _ in range(250):
+        # generate new random sequence
+        X, y = get_sequence(n_timesteps)
+        # fit model for one epoch on this sequence
+        hist = model.fit(X, y, epochs=1, batch_size=1, verbose=1)  # , callbacks=[checkpoint])
+        loss.append(hist.history['loss'][0])
+    return loss
+
+
+def trainLabelModel():
+    n_timesteps = 10
+    model = formnn_lstm(n_timesteps, mode='concat')
+    model_history = train_model(model, n_timesteps)
+    plt.plot(model_history)
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.savefig('Initial_Label_Model_Loss.png')
+    plt.show()
+
+    print("Evaluating...")
+    X, y = get_sequence(n_timesteps)
+    score = model.evaluate(X, y)
+    print("Evaluation complete!\nScore:")
+    print(f"Loss: {score[0]}\tAccuracy: {score[1]}")
+
+    print("Predicting...")
+    X, y = get_sequence(n_timesteps)
+    yhat = model.predict(X, verbose=1)
+    print("Prediction complete!")
+    for i in range(n_timesteps):
+        print('Expected:', y[0, i], 'Predicted', yhat[0, i])
+    pass
+
+
+def prepare_lstm_peaks():
+    MIDI_FILES = os.path.join(MASTER_INPUT_DIR, 'Full/MIDI/')
+    PEAK_DIR = os.path.join(MASTER_INPUT_DIR, 'Full/PEAKS/')
+    cnt = len(os.listdir(PEAK_DIR)) + 1
+    for file in os.listdir(MIDI_FILES):
+        foldername = MIDI_FILES.split('\\')[-1]
+        filename, name = file, file.split('/')[-1].split('.')[0]
+        if str(os.path.basename(name)) + ".npy" in os.listdir(PEAK_DIR):
+            continue
+        print(f"\nWorking on {os.path.basename(name)}, file #" + str(cnt))
+        fullfilename = MIDI_FILES + '/' + filename
+        peaks = du.peak_picking(fullfilename, name, foldername, returnpeaks=True)
+        print(peaks)
+        np.save(os.path.join(PEAK_DIR, os.path.basename(name)), peaks)
+        cnt += 1
 
 
 if __name__ == '__main__':
@@ -781,5 +959,7 @@ if __name__ == '__main__':
     # prepare_model_training_input()
     # prepare_train_data()
     # buildValidationSet()
-    trainModel()
+    # trainFormModel()
+    prepare_lstm_peaks()
+    # trainLabelModel()
     print("\nDone!")

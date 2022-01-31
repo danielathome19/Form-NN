@@ -368,10 +368,11 @@ def create_mls_sslm(filename, name="", foldername="", filepath=DEFAULT_FILEPATH)
         print("ERROR. Time dimension of Euc SSLM and MLS mismatch.")
         print("MLS has", x_prime.shape[1], "lag bins and the Euc SSLM has", sslm.shape[1])
     return
+# endregion
 
 
-# CREATE CHROMA GRAPHS (deprecated)
-def create_mls_sslm2(filename, name="", foldername="", filepath=DEFAULT_FILEPATH):
+# Novelty Function
+def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, returnpeaks=True):
     # ------------PARAMETERS--------------
     window_size = 0.209  # sec/frame
     samples_frame = 8192  # samples_frame = math.ceil(window_size*sr)
@@ -421,8 +422,8 @@ def create_mls_sslm2(filename, name="", foldername="", filepath=DEFAULT_FILEPATH
 
     X_hat = x_[:, w:]  # (w, frames)
 
-    N_prima = chroma.shape[1]
-    N = N_prima - w
+    N_prime = chroma.shape[1]
+    N = N_prime - w
 
     """PLOTTING x, x_ and the resulting x_hat"""
     # x (first chroma)
@@ -550,9 +551,9 @@ def create_mls_sslm2(filename, name="", foldername="", filepath=DEFAULT_FILEPATH
         'peak_heights']  # array of peaks
     b = peaks_position
     # Adding elements 1 and N' to the begining and end of the arrray
-    if b[0] != 0:
+    if len(b) == 0 or b[0] != 0:
         b = np.concatenate([[0], b])  # b: segment boundaries
-    if b[-1] != N_prima - 1:
+    if b[-1] != N_prime - 1:
         b = np.concatenate([b, [N - 1]])
 
     """PLOTTING NOVELTY CURVE"""
@@ -565,6 +566,13 @@ def create_mls_sslm2(filename, name="", foldername="", filepath=DEFAULT_FILEPATH
         plt.axvline(b[i], color='r', linestyle='--')
     plt.plot(frames, c_norm)
     plt.show()
+
+    if returnpeaks:
+        peaktimes = []
+        for i in range(len(b)):
+            timeSecondsDecimal = b[i] / sr * hop_length
+            peaktimes.append(timeSecondsDecimal)
+        return peaktimes
 
     # Cumulative matrix: Q
     Q = np.zeros_like(R)
@@ -654,8 +662,8 @@ def create_mls_sslm2(filename, name="", foldername="", filepath=DEFAULT_FILEPATH
     ax.axes.get_xaxis().set_visible(False)
     ax.axes.get_yaxis().set_visible(False)
     ax.set_frame_on(False)
-    filename = filepath + "SSLMCRM/" + os.path.basename(name) + 'crm.png'
-    plt.savefig(filename, bbox_inches='tight', pad_inches=0)  # dpi=400, transparent=True
+    # filename = filepath + "SSLMCRM/" + os.path.basename(name) + 'crm.png'
+    # plt.savefig(filename, bbox_inches='tight', pad_inches=0)  # dpi=400, transparent=True
     fig.clf()
     plt.close(fig)
     del ax, fig
@@ -674,6 +682,8 @@ def create_mls_sslm2(filename, name="", foldername="", filepath=DEFAULT_FILEPATH
     for i in range(len(b)):
         plt.axvline(b[i], color='r', linestyle='--')
         timeSecondsDecimal = b[i] / sr * hop_length
+        """ 
+        # DEMO EVENT COMPARISON
         timeStr = str(datetime.timedelta(seconds=timeSecondsDecimal))
         gtTimeStr = 0
         timeDifference = 0
@@ -686,11 +696,10 @@ def create_mls_sslm2(filename, name="", foldername="", filepath=DEFAULT_FILEPATH
               # f"G.T. Labels: {lbls[0]}")
               f"G.T. Labels: {lbls[i]}")
         timeDifs = np.append(timeDifs, abs(timeDifference))
+        """
     plt.plot(frames, c_norm)
     plt.show()
     print("\nAverage (absolute) time difference: ±" + str(np.average(timeDifs)))
-
-# endregion
 
 
 def ReadNumbersFromLine(line):
@@ -738,6 +747,9 @@ def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1):
     forms = []
     for (lbl_dir_path, lbl_dnames, lbl_fnames) in os.walk(lblpath):
         for f in lbl_fnames:
+            if "variations_in_f_1793_(c)iscenk" in f or "dvoraktheme_and_variations_36_(c)yogore" \
+                    in f or "Sonata_No_8_1st_Movement_K_310" in f:  # TODO: remove
+                continue
             if stop != -1:
                 stop -= 1
                 if stop == 0:
