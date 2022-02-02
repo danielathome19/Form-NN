@@ -97,10 +97,12 @@ SSLMCOS_Data_Dir = os.path.join(MASTER_DIR, 'Images/Train/SSLMCOS/')
 SSLMEUC_Data_Dir = os.path.join(MASTER_DIR, 'Images/Train/SSLMEUC/')
 SSLMCRM_Data_Dir = os.path.join(MASTER_DIR, 'Images/Train/SSLMCRM/')
 
+FULL_DIR = os.path.join(MASTER_INPUT_DIR, 'Full/')
 TRAIN_DIR = os.path.join(MASTER_INPUT_DIR, 'Train/')
 TEST_DIR = os.path.join(MASTER_INPUT_DIR, 'Test/')
 VAL_DIR = os.path.join(MASTER_INPUT_DIR, 'Validate/')
 
+FULL_LABELPATH = os.path.join(MASTER_LABELPATH, 'Full/')
 TRAIN_LABELPATH = os.path.join(MASTER_LABELPATH, 'Train/')
 TEST_LABELPATH = os.path.join(MASTER_LABELPATH, 'Test/')
 VAL_LABELPATH = os.path.join(MASTER_LABELPATH, 'Validate/')
@@ -430,6 +432,42 @@ def get_class_weights(labels, one_hot=False):
     return {i: (1. / class_counts[i]) * float(len(labels)) / float(n_classes) for i in range(int(n_classes))}
 
 
+def multi_input_generator_helper(gen1, gen2, gen3, gen4, concat=True):
+    while True:
+        sslm1 = next(gen1)[0]
+        sslm2 = next(gen2)[0]
+        sslm3 = next(gen3)[0]
+        sslm4 = next(gen4)[0]
+        if not concat:
+            yield [sslm1, sslm2, sslm3, sslm4], sslm1.shape
+            continue
+
+        if sslm2.shape != sslm1.shape:
+            sslm2 = resize(sslm2, sslm1.shape)
+        if sslm3.shape != sslm1.shape:
+            sslm3 = resize(sslm3, sslm1.shape)
+        if sslm4.shape != sslm1.shape:
+            sslm4 = resize(sslm4, sslm1.shape)
+        yield tf.expand_dims(
+            np.concatenate((sslm1,
+                            np.concatenate((sslm2,
+                                            np.concatenate((sslm3, sslm4),
+                                                           axis=-1)), axis=-1)), axis=-1), axis=-1), sslm1.shape
+
+
+def multi_input_generator(gen1, gen2, gen3, gen4, gen5, gen6, feature=2, concat=True, expand_dim_6=True):
+    while True:
+        mlsgen = next(gen1)
+        sslmimgs, sslmshape = next(multi_input_generator_helper(gen2, gen3, gen4, gen5, concat))
+        mlsimg = mlsgen[0]
+        if not expand_dim_6:
+            yield [mlsimg, sslmimgs, next(gen6)[0]], mlsgen[1][feature]
+            continue
+        if mlsimg.shape != sslmshape:
+            mlsimg = resize(mlsimg, sslmshape)
+        yield [mlsimg, sslmimgs, tf.expand_dims(next(gen6)[0], axis=0)], mlsgen[1][feature]
+
+
 def prepare_model_training_input():
     print("Preparing MLS inputs")
     dus.util_main(feature="mls")
@@ -610,8 +648,8 @@ def formnn_pipeline2(combined, output_channels=32, lrval=0.0001, numclasses=12):
 def formnn_mls(output_channels=32, lrval=0.0001):
     inputA = layers.Input(batch_input_shape=(None, None, None, 1))
     x = layers.ZeroPadding2D(padding=((2, 2), (3, 3)))(inputA)
-    x = layers.Conv2D(filters=output_channels, kernel_size=(5, 7), strides=(1, 1), padding='same', kernel_regularizer=l2(0.01),
-                      bias_regularizer=l2(0.01))(x)
+    x = layers.Conv2D(filters=output_channels, kernel_size=(5, 7), strides=(1, 1), padding='same',
+                      kernel_regularizer=l2(0.01), bias_regularizer=l2(0.01))(x)
     x = layers.LeakyReLU(alpha=lrval)(x)
     x = layers.ZeroPadding2D(padding=((1, 1), (1, 1)))(x)
     x = layers.MaxPooling2D(pool_size=(5, 3), strides=(5, 1), padding='same')(x)
@@ -623,8 +661,8 @@ def formnn_mls(output_channels=32, lrval=0.0001):
 def formnn_sslm(output_channels=32, lrval=0.0001):
     inputB = layers.Input(batch_input_shape=(None, None, None, 1))  # (None, None, None, 4)
     y = layers.ZeroPadding2D(padding=((2, 2), (3, 3)))(inputB)
-    y = layers.Conv2D(filters=output_channels, kernel_size=(5, 7), strides=(1, 1), padding='same', kernel_regularizer=l2(0.01),
-                      bias_regularizer=l2(0.01))(y)
+    y = layers.Conv2D(filters=output_channels, kernel_size=(5, 7), strides=(1, 1), padding='same',
+                      kernel_regularizer=l2(0.01), bias_regularizer=l2(0.01))(y)
     y = layers.LeakyReLU(alpha=lrval)(y)
     y = layers.ZeroPadding2D(padding=((1, 1), (1, 1)))(y)
     y = layers.MaxPooling2D(pool_size=(5, 3), strides=(5, 1), padding='same')(y)
@@ -642,12 +680,12 @@ def formnn_pipeline(combined, output_channels=32, lrval=0.0001, numclasses=12):
     z = layers.LeakyReLU(alpha=lrval)(z)
     z = layers.SpatialDropout2D(rate=0.3)(z)
     # z = layers.Reshape(target_shape=(-1, 1, output_channels * 152))(z)
-    z = layers.Conv2D(filters=output_channels * 4, kernel_size=(1, 1), strides=(1, 1), padding='same', kernel_regularizer=l2(0.01),
-                      bias_regularizer=l2(0.01))(z)
+    z = layers.Conv2D(filters=output_channels * 4, kernel_size=(1, 1), strides=(1, 1), padding='same',
+                      kernel_regularizer=l2(0.01), bias_regularizer=l2(0.01))(z)
     z = layers.LeakyReLU(alpha=lrval)(z)
-    #z = layers.SpatialDropout2D(rate=0.5)(z)
-    z = layers.Conv2D(filters=output_channels * 8, kernel_size=(1, 1), strides=(1, 1), padding='same', kernel_regularizer=l2(0.01),
-                      bias_regularizer=l2(0.01))(z)
+    #  z = layers.SpatialDropout2D(rate=0.5)(z)
+    z = layers.Conv2D(filters=output_channels * 8, kernel_size=(1, 1), strides=(1, 1), padding='same',
+                      kernel_regularizer=l2(0.01), bias_regularizer=l2(0.01))(z)
     z = layers.LeakyReLU(alpha=lrval)(z)
     z = layers.GlobalAveragePooling2D()(z)
     # z = layers.Flatten()(z)
@@ -658,10 +696,10 @@ def formnn_pipeline(combined, output_channels=32, lrval=0.0001, numclasses=12):
 
 
 def formnn_fuse(output_channels=32, lrval=0.0001, numclasses=12):
-    cnn1_mel = formnn_mls2(output_channels, lrval=lrval)
-    cnn1_sslm = formnn_sslm2(output_channels, lrval=lrval)
+    cnn1_mel = formnn_mls(output_channels, lrval=lrval)
+    cnn1_sslm = formnn_sslm(output_channels, lrval=lrval)
     combined = layers.concatenate([cnn1_mel.output, cnn1_sslm.output], axis=2)
-    cnn2_in = formnn_pipeline2(combined, output_channels, lrval=lrval, numclasses=numclasses)
+    cnn2_in = formnn_pipeline(combined, output_channels, lrval=lrval, numclasses=numclasses)
     # opt = keras.optimizers.SGD(lr=lrval, decay=1e-6, momentum=0.9, nesterov=True)
     opt = keras.optimizers.Adam(lr=lrval, epsilon=1e-6)
 
@@ -724,23 +762,6 @@ def trainFormModel():
     # endregion
 
     # findBestShape(mls_train, sslm_cmcos_train)
-    def multi_input_generator_helper(gen1, gen2, gen3, gen4):
-        while True:
-            sslm1 = next(gen1)[0]
-            sslm2 = next(gen2)[0]
-            sslm3 = next(gen3)[0]
-            sslm4 = next(gen4)[0]
-            yield tf.expand_dims(
-                np.concatenate((sslm1,
-                                np.concatenate((sslm2,
-                                                np.concatenate((sslm3, sslm4),
-                                                               axis=-1)), axis=-1)), axis=-1), axis=-1)
-
-    def multi_input_generator(gen1, gen2, gen3, gen4, gen5, gen6, feature=2):
-        while True:
-            mlsgen = next(gen1)
-            sslmimgs = next(multi_input_generator_helper(gen2, gen3, gen4, gen5))
-            yield [mlsgen[0], sslmimgs, tf.expand_dims(next(gen6)[0], axis=0)], mlsgen[1][feature]
 
     train_datagen = multi_input_generator(mls_train, sslm_cmcos_train, sslm_cmeuc_train, sslm_mfcos_train,
                                           sslm_mfeuc_train, midi_train)
@@ -758,7 +779,7 @@ def trainFormModel():
         print(f"Train and validation or testing datasets have differing numbers of classes: "
               f"{mls_train.getNumClasses()} vs. {mls_val.getNumClasses()} vs. {mls_test.getNumClasses()}")
 
-    classweights = get_class_weights(mls_train.getLabels().numpy().squeeze(axis=-1), one_hot=True)
+    # classweights = get_class_weights(mls_train.getLabels().numpy().squeeze(axis=-1), one_hot=True)
     """
     # Show class weights as bar graph
     barx, bary = zip(*sorted(classweights.items()))
@@ -779,7 +800,7 @@ def trainFormModel():
     checkpoint = ModelCheckpoint(os.path.join(MASTER_DIR, 'best_formNN_model.hdf5'), monitor='val_accuracy', verbose=0,
                                  save_best_only=True, mode='max', save_freq='epoch', save_weights_only=True)
     model_history = model.fit(train_datagen, epochs=100, verbose=1, validation_data=valid_datagen, shuffle=False,
-                              callbacks=[checkpoint, early_stopping], batch_size=batch_size,  #class_weight=classweights
+                              callbacks=[checkpoint, early_stopping], batch_size=batch_size,  # class_weight=classweight
                               steps_per_epoch=steps_per_epoch, validation_steps=steps_per_valid)
 
     print("Training complete!\n")
@@ -857,6 +878,7 @@ def trainFormModel():
     # Measure confidence level? Prediction Interval (PI)
     # https://medium.com/hal24k-techblog/how-to-generate-neural-network-confidence-intervals-with-keras-e4c0b78ebbdf
 
+    # TODO: move dataset to be the feature mean, rather than the set
     # TODO: feed duration into model to see if it can detect a difference by length?
     # https://github.com/philipperemy/keract#display-the-activations-as-a-heatmap-overlaid-on-an-image
     # Check out humdrum dataset https://www.humdrum.org/
@@ -867,8 +889,116 @@ def trainFormModel():
     # https://towardsdatascience.com/10-minutes-to-building-a-cnn-binary-image-classifier-in-tensorflow-4e216b2034aa
     # Use spectral centroids, https://musicinformationretrieval.com/spectral_features.html
     # Use novelty function for each song, save array of predicted peaks using np.save and load
+    # Include duration as a feature!!!
+
+    # filename,length,chroma_stft_mean,chroma_stft_var,rms_mean,rms_var,
+    # spectral_centroid_mean,spectral_centroid_var,spectral_bandwidth_mean,
+    # spectral_bandwidth_var,rolloff_mean,rolloff_var,zero_crossing_rate_mean,
+    # zero_crossing_rate_var,harmony_mean,harmony_var,perceptr_mean,perceptr_var,
+    # tempo,mfcc1_mean,mfcc1_var,mfcc2_mean,mfcc2_var,mfcc3_mean,mfcc3_var,mfcc4_mean,
+    # mfcc4_var,mfcc5_mean,mfcc5_var,mfcc6_mean,mfcc6_var,mfcc7_mean,mfcc7_var,mfcc8_mean,
+    # mfcc8_var,mfcc9_mean,mfcc9_var,mfcc10_mean,mfcc10_var,mfcc11_mean,mfcc11_var,mfcc12_mean,
+    # mfcc12_var,mfcc13_mean,mfcc13_var,mfcc14_mean,mfcc14_var,mfcc15_mean,mfcc15_var,mfcc16_mean,
+    # mfcc16_var,mfcc17_mean,mfcc17_var,mfcc18_mean,mfcc18_var,mfcc19_mean,mfcc19_var,mfcc20_mean,mfcc20_var,label
 
 
+def create_form_dataset():
+    mls_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'MLS/'),
+                                   label_path=FULL_LABELPATH, batch_size=1, reshape=False)
+    sslm_cmcos_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_CRM_COS/'),
+                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
+    sslm_cmeuc_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_CRM_EUC/'),
+                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
+    sslm_mfcos_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_MFCC_COS/'),
+                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
+    sslm_mfeuc_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_MFCC_EUC/'),
+                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
+    midi_full = dus.BuildMIDIloader(os.path.join(FULL_DIR, 'MIDI/'),
+                                    label_path=FULL_LABELPATH, batch_size=1, reshape=False, building_df=True)
+
+    print("Done building dataloaders, merging...")
+    full_datagen = multi_input_generator(mls_full, sslm_cmcos_full, sslm_cmeuc_full, sslm_mfcos_full,
+                                         sslm_mfeuc_full, midi_full, concat=False, expand_dim_6=False)
+    print("Merging complete. Printing...")
+
+    df = pd.DataFrame(columns=['filename', 'duration', 'ssm_log_mel_mean', 'ssm_log_mel_var',
+                               'sslm_chroma_cos_mean', 'sslm_chroma_cos_var',
+                               'sslm_chroma_euc_mean', 'sslm_chroma_euc_var',
+                               'sslm_mfcc_cos_mean', 'sslm_mfcc_cos_var',
+                               'sslm_mfcc_euc_mean', 'sslm_mfcc_euc_var',  # ---{
+                               'chroma_cens_mean', 'chroma_cens_var',
+                               'chroma_cqt_mean', 'chroma_cqt_var',
+                               'chroma_stft_mean', 'chroma_stft_var',
+                               'mel_mean', 'mel_var',
+                               'mfcc_mean', 'mfcc_var',
+                               'spectral_bandwidth_mean', 'spectral_bandwidth_var',
+                               'spectral_centroid_mean', 'spectral_centroid_var',
+                               'spectral_contrast_mean', 'spectral_contrast_var',
+                               'spectral_flatness_mean', 'spectral_flatness_var',
+                               'spectral_rolloff_mean', 'spectral_rolloff_var',
+                               'poly_features_mean', 'poly_features_var',
+                               'tonnetz_mean', 'tonnetz_var',
+                               'zero_crossing_mean', 'zero_crossing_var',
+                               'tempogram_mean', 'tempogram_var',
+                               'fourier_tempo_mean', 'fourier_tempo_var',  # }---
+                               'formtype'])
+    label_encoder = LabelEncoder()
+    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
+    for indx, cur_data in enumerate(full_datagen):
+        if indx == len(mls_full):
+            break
+        c_flname = mls_full.getSong(indx)
+        c_sngdur = mls_full.getDuration(indx)
+        c_slmmls = cur_data[0][0]
+        c_scmcos = cur_data[0][1][0]
+        c_scmeuc = cur_data[0][1][1]
+        c_smfcos = cur_data[0][1][2]
+        c_smfeuc = cur_data[0][1][3]
+        c_midinf = cur_data[0][2]
+        c_flabel = cur_data[1]
+        c_flabel = label_encoder.inverse_transform(np.where(c_flabel == 1)[0])[0]
+
+        df.loc[indx] = [c_flname, c_sngdur, c_slmmls[0], c_slmmls[1], c_scmcos[0], c_scmcos[1],
+                        c_scmeuc[0], c_scmeuc[1], c_smfcos[0], c_smfcos[1], c_smfeuc[0], c_smfeuc[1],
+                        c_midinf[2], c_midinf[3], c_midinf[4], c_midinf[5], c_midinf[6], c_midinf[7],
+                        c_midinf[8], c_midinf[9], c_midinf[10], c_midinf[11], c_midinf[12], c_midinf[13],
+                        c_midinf[14], c_midinf[15], c_midinf[0], c_midinf[1], c_midinf[16], c_midinf[17],
+                        c_midinf[18], c_midinf[19], c_midinf[20], c_midinf[21], c_midinf[22], c_midinf[23],
+                        c_midinf[24], c_midinf[25], c_midinf[26], c_midinf[27], c_midinf[28], c_midinf[29], c_flabel]
+
+    df.to_csv(os.path.join(MASTER_DIR, 'full_dataset.csv'), index=False)
+
+    # TODO: csv representation
+    # filename, duration,
+    # ssm_log_mel_mean, ssm_log_mel_var,
+    # sslm_chroma_cos_mean,sslm_chroma_cos_var,
+    # sslm_chroma_euc_mean, sslm_chroma_euc_var,
+    # sslm_mfcc_cos_mean, sslm_mfcc_cos_var,
+    # sslm_mfcc_euc_mean, sslm_mfcc_euc_var,
+    # spectral_contrast_mean, spectral_contrast_var,
+
+    # chroma_stft_mean, chroma_stft_var,
+    # chroma_cqt_mean, chroma_cqt_var,
+    # chroma_cens_mean, chroma_cens_var,
+    # mel_mean, mel_var,
+    # mfcc_mean, mfcc_var,
+    # spectral_bandwidth_mean, spectral_bandwidth_var,
+    # spectral_centroid_mean, spectral_centroid_var,
+    # spectral_flatness_mean, spectral_flatness_var,
+    # spectral_rolloff_mean, spectral_rolloff_var,
+    # poly_features_mean, poly_features_var,
+    # tonnetz_mean, tonnetz_var,
+    # zero_crossing_mean, zero_crossing_var,
+    # tempogram_mean, tempogram_var,
+    # fourier_tempo_mean, fourier_tempo_var,
+
+    # formtype
+
+    # TODO: don't forget to normalize data after creating csv
+    pass
+
+
+# region LabelModel
 def formnn_lstm(n_timesteps, mode='concat'):  # Try 'ave', 'mul', and 'sum' also
     model = Sequential()
     model.add(layers.Bidirectional(
@@ -949,6 +1079,7 @@ def prepare_lstm_peaks():
         print(peaks)
         np.save(os.path.join(PEAK_DIR, os.path.basename(name)), peaks)
         cnt += 1
+# endregion
 
 
 if __name__ == '__main__':
@@ -960,6 +1091,7 @@ if __name__ == '__main__':
     # prepare_train_data()
     # buildValidationSet()
     # trainFormModel()
-    prepare_lstm_peaks()
+    # prepare_lstm_peaks()
     # trainLabelModel()
+    create_form_dataset()
     print("\nDone!")

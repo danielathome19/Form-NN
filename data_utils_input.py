@@ -209,11 +209,6 @@ def util_main(feature, mode="cos"):
         for file in os.listdir(folder):
             # foldername = folder.split('\\')[-1]
             name_song, name = file, file.split('/')[-1].split('.')[0]
-
-            # if "x" not in name:
-            #     continue
-            # print(name)
-
             start_time_song = time.time()
             i += 1
             song_id = name_song[:-4]  # delete .ext characters from the string
@@ -224,7 +219,7 @@ def util_main(feature, mode="cos"):
                 if feature == "mfcc":
                     mel = mel_spectrogram(sr_desired, folder + '/' + name_song, window_size, hop_length)
                     if mode == "cos":
-                        sslm_near = sslm_gen(mel, p, L_near, mode=mode, feature="mfcc")
+                        sslm_near = sslm_gen(mel, p, L_near, mode=mode, feature="mfcc")[0]
                         # mls = max_pooling(mel, p2)
                         # Save mels matrices and sslms as numpy arrays in separate paths
                         # np.save(im_path_mel_near + song_id, mls)
@@ -422,7 +417,7 @@ def normalize_image(image, label, labels_sec, label_form):
 
 # Load MLS and SSLM Data
 class BuildDataloader(k.utils.Sequence):
-    def __init__(self, images_path, label_path=DEFAULT_LABELPATH, transforms=None, batch_size=32, end=-1):
+    def __init__(self, images_path, label_path=DEFAULT_LABELPATH, transforms=None, batch_size=32, end=-1, reshape=True):
         self.songs_list = []
         self.images_path = images_path
         self.images_list = []
@@ -432,24 +427,28 @@ class BuildDataloader(k.utils.Sequence):
         self.labels_form_list = []
         self.batch_size = batch_size
         self.n = 0
+        self.reshape = reshape
 
         print("Building dataloader for " + self.images_path)
         cnt = 1
         for (im_dirpath, im_dirnames, im_filenames) in os.walk(self.images_path):
             for f in im_filenames:
                 if f.endswith('.npy'):
-                    if "variations_in_f_1793_(c)iscenk" in f or "dvoraktheme_and_variations_36_(c)yogore" \
-                            in f or "Sonata_No_8_1st_Movement_K_310" in f:
-                        continue  # TODO: remove (fix datafiles)
                     self.songs_list.append(os.path.splitext(f)[0])
                     # print("Reading file #" + str(cnt))
                     img_path = im_dirpath + f
                     image = np.load(img_path, allow_pickle=True)
                     if image.ndim == 1:
-                        print("Erroneous file:", img_path, "Shape:", image.shape, image.ndim)
+                        raise ValueError("Erroneous file:", img_path, "Shape:", image.shape, image.ndim)
                     else:
-                        image = resize(image, (500, 750))
+                        # image = resize(image, (300, 500))
                         # image = (image - image.mean()) / (image.std() + 1e-8)
+                        if reshape:
+                            image = np.mean(image, axis=0)
+                        else:
+                            image1 = np.mean(image, axis=0)
+                            image2 = np.var(image, axis=0)
+                            image = np.array([image1, image2])
                     self.images_list.append(image)
                     cnt += 1
                     if end != -1:
@@ -500,7 +499,8 @@ class BuildDataloader(k.utils.Sequence):
         # print(image)
         # if image.ndim == 1:
         #     print(image)
-        image = image[np.newaxis, :, :]
+        if self.reshape:
+            image = image[np.newaxis, :, np.newaxis]
         labels = self.labels_list[index]
         # print("Labels: ", str(len(labels)), "Images: ", str(len(image)), image.shape)
         labels_sec = self.labels_sec_list[index]
@@ -536,11 +536,15 @@ class BuildDataloader(k.utils.Sequence):
     def getFormLabel(self, index):
         return self.labels_form_list[index]
 
+    def getDuration(self, index):
+        return self.labels_sec_list[index][-1]
+
 
 # TODO: Save all transformed data into one large npy file [mls, {sslm1, 2, 3, 4}, midi], [labelphrase, sec, form, name]
 # Load MIDI Data
 class BuildMIDIloader(k.utils.Sequence):
-    def __init__(self, midi_path, label_path=DEFAULT_LABELPATH, transforms=None, batch_size=32, end=-1):
+    def __init__(self, midi_path, label_path=DEFAULT_LABELPATH,
+                 transforms=None, batch_size=32, end=-1, reshape=True, building_df=False):
         self.songs_list = []
         self.midi_path = midi_path
         self.midi_list = pd.DataFrame()
@@ -550,18 +554,33 @@ class BuildMIDIloader(k.utils.Sequence):
         self.labels_form_list = []
         self.batch_size = batch_size
         self.n = 0
+        self.reshape = reshape
 
         print("Building dataloader for " + self.midi_path)
-        df = pd.DataFrame(columns=['spectral_contrast'])
+        df = pd.DataFrame(columns=['spectral_contrast_mean', 'spectral_contrast_var'])
+        if building_df:
+            df2 = pd.DataFrame(columns=['chroma_stft_mean', 'chroma_stft_var',
+                                        'chroma_cqt_mean', 'chroma_cqt_var',
+                                        'chroma_cens_mean', 'chroma_cens_var',
+                                        'mel_mean', 'mel_var',
+                                        'mfcc_mean', 'mfcc_var',
+                                        'spectral_bandwidth_mean', 'spectral_bandwidth_var',
+                                        'spectral_centroid_mean', 'spectral_centroid_var',
+                                        'spectral_flatness_mean', 'spectral_flatness_var',
+                                        'spectral_rolloff_mean', 'spectral_rolloff_var',
+                                        'poly_features_mean', 'poly_features_var',
+                                        'tonnetz_mean', 'tonnetz_var',
+                                        'zero_crossing_mean', 'zero_crossing_var',
+                                        'tempogram_mean', 'tempogram_var',
+                                        'fourier_tempo_mean', 'fourier_tempo_var'])
+            df = pd.concat([df, df2], axis=1)
+            pass
         cnt = 1
         for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(self.midi_path):
             for f in mid_filenames:
                 if f.endswith('.mid') or f.endswith('.midi'):
-                    if "variations_in_f_1793_(c)iscenk" in f or \
-                            "dvoraktheme_and_variations_36_(c)yogore" in f or "Sonata_No_8_1st_Movement_K_310" in f:
-                        continue  # TODO: remove (fix datafiles)
                     self.songs_list.append(os.path.splitext(f)[0])
-                    # print("Reading file #" + str(cnt))
+                    print("Reading file #" + str(cnt))
                     mid_path = mid_dirpath + f
                     # print("Working on file: " + f)
                     X, sample_rate = librosa.load(mid_path, res_type='kaiser_fast', duration=3, sr=44100, offset=0.5)
@@ -576,18 +595,54 @@ class BuildMIDIloader(k.utils.Sequence):
                     plt.show()
                     """
                     contrast = np.mean(contrast, axis=0)
-                    df.loc[cnt-1] = [contrast]
+                    contrast2 = np.var(contrast, axis=0)
+                    if building_df:
+                        chroma_cens = librosa.feature.chroma_cens(y=X, sr=sample_rate)
+                        chroma_cqt = librosa.feature.chroma_cqt(y=X, sr=sample_rate)
+                        chroma_stft = librosa.feature.chroma_stft(y=X, sr=sample_rate)
+                        mel_spec = librosa.feature.melspectrogram(y=X, sr=sample_rate)
+                        mfcc_spec = librosa.feature.mfcc(y=X, sr=sample_rate)
+                        spec_bdwth = librosa.feature.spectral_bandwidth(y=X, sr=sample_rate)
+                        spec_centrd = librosa.feature.spectral_centroid(y=X, sr=sample_rate)
+                        spec_flatns = librosa.feature.spectral_flatness(y=X)
+                        spec_rolloff = librosa.feature.spectral_rolloff(y=X, sr=sample_rate)
+                        poly_feat = librosa.feature.poly_features(y=X, sr=sample_rate)
+                        tonnetz = librosa.feature.tonnetz(y=X, sr=sample_rate)
+                        zero_cross = librosa.feature.zero_crossing_rate(y=X)
+                        tempogram = librosa.feature.tempogram(y=X, sr=sample_rate)
+                        fouriertemp = librosa.feature.fourier_tempogram(y=X, sr=sample_rate)
+
+                        df.loc[cnt-1] = [contrast, contrast2,  # 0, 1
+                                         np.mean(chroma_cens, axis=0), np.var(chroma_cens, axis=0),  # 2, 3
+                                         np.mean(chroma_cqt, axis=0), np.var(chroma_cqt, axis=0),  # 4, 5
+                                         np.mean(chroma_stft, axis=0), np.var(chroma_stft, axis=0),  # 6, 7
+                                         np.mean(mel_spec, axis=0), np.var(mel_spec, axis=0),  # 8, 9
+                                         np.mean(mfcc_spec, axis=0), np.var(mfcc_spec, axis=0),  # 10, 11
+                                         np.mean(spec_bdwth, axis=0), np.var(spec_bdwth, axis=0),  # 12, 13
+                                         np.mean(spec_centrd, axis=0), np.var(spec_centrd, axis=0),  # 14, 15
+                                         np.mean(spec_flatns, axis=0), np.var(spec_flatns, axis=0),  # 16, 17
+                                         np.mean(spec_rolloff, axis=0), np.var(spec_rolloff, axis=0),  # 18, 19
+                                         np.mean(poly_feat, axis=0), np.var(poly_feat, axis=0),  # 20, 21
+                                         np.mean(tonnetz, axis=0), np.var(tonnetz, axis=0),  # 22, 23
+                                         np.mean(zero_cross, axis=0), np.var(zero_cross, axis=0),  # 24, 25
+                                         np.mean(tempogram, axis=0), np.var(tempogram, axis=0),  # 26, 27
+                                         np.mean(fouriertemp, axis=0), np.var(fouriertemp, axis=0)]  # 28, 29
+                    else:
+                        df.loc[cnt-1] = [contrast, contrast2]
                     cnt += 1
                     if end != -1:
                         if cnt == end:
                             break
-        df = pd.DataFrame(df['spectral_contrast'].values.tolist())
+        # df = pd.DataFrame(df['spectral_contrast'].values.tolist())
         df = df.fillna(0)
-        mean = np.mean(df, axis=0)
-        std = np.std(df, axis=0)
-        df = (df - mean) / std
-        df = np.array(df)
-        df = df[:, :, np.newaxis]
+        if reshape:
+            mean = np.mean(df, axis=0)
+            std = np.std(df, axis=0)
+            df = (df - mean) / std
+            df = np.array(df)
+            df = df[:, :, np.newaxis]
+        else:
+            df = np.array(df)
         self.midi_list = df
         lbls_seconds, lbls_phrases, lbl_forms = du.ReadLabelSecondsPhrasesFromFolder(lblpath=self.labels_path, stop=cnt)
         self.labels_list = lbls_phrases

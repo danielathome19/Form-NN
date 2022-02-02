@@ -747,9 +747,6 @@ def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1):
     forms = []
     for (lbl_dir_path, lbl_dnames, lbl_fnames) in os.walk(lblpath):
         for f in lbl_fnames:
-            if "variations_in_f_1793_(c)iscenk" in f or "dvoraktheme_and_variations_36_(c)yogore" \
-                    in f or "Sonata_No_8_1st_Movement_K_310" in f:  # TODO: remove
-                continue
             if stop != -1:
                 stop -= 1
                 if stop == 0:
