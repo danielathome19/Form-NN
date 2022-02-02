@@ -13,6 +13,7 @@ import wave
 from IPython.display import Audio
 from matplotlib.pyplot import specgram
 import pandas as pd
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.metrics import confusion_matrix
 import IPython.display as ipd  # To play sound in the notebook
 import os  # interface with underlying OS that python is running on
@@ -52,6 +53,7 @@ import tensorflow.keras.models as km
 import skimage.measure
 import scipy
 from scipy.spatial import distance
+from numpy import inf
 import audioread
 import librosa.segment
 from sklearn.neighbors import NearestNeighbors
@@ -66,13 +68,15 @@ from data_utils_input import normalize_image, padding_MLS, padding_SSLM, borders
 from keras import backend as k
 from shutil import copyfile
 import fnmatch
+from sklearn import preprocessing
 import hyperas
 from hyperopt import Trials, STATUS_OK, tpe
 from hyperas.distributions import choice, uniform
+from ast import literal_eval
 from skimage.transform import resize
 
 k.set_image_data_format('channels_last')
-# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 gpus = tf.config.experimental.list_physical_devices('GPU')
 for gpu in gpus:
@@ -578,10 +582,81 @@ def findBestShape(mls_train, sslm_train):
     print(f"Dimension 1:\nMean: {dim2_mean}\t\tMedian: {dim2_median}\t\tMode: {dim2_mode}")
 
 
+def create_form_dataset():
+    mls_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'MLS/'),
+                                   label_path=FULL_LABELPATH, batch_size=1, reshape=False)
+    sslm_cmcos_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_CRM_COS/'),
+                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
+    sslm_cmeuc_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_CRM_EUC/'),
+                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
+    sslm_mfcos_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_MFCC_COS/'),
+                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
+    sslm_mfeuc_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_MFCC_EUC/'),
+                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
+    midi_full = dus.BuildMIDIloader(os.path.join(FULL_DIR, 'MIDI/'),
+                                    label_path=FULL_LABELPATH, batch_size=1, reshape=False, building_df=True)
+
+    print("Done building dataloaders, merging...")
+    full_datagen = multi_input_generator(mls_full, sslm_cmcos_full, sslm_cmeuc_full, sslm_mfcos_full,
+                                         sslm_mfeuc_full, midi_full, concat=False, expand_dim_6=False)
+    print("Merging complete. Printing...")
+
+    np.set_string_function(
+        lambda x: repr(x).replace('(', '').replace(')', '').replace('array', '').replace("       ", ' '), repr=False)
+    np.set_printoptions(threshold=inf)
+
+    df = pd.DataFrame(columns=['filename', 'duration', 'ssm_log_mel_mean', 'ssm_log_mel_var',
+                               'sslm_chroma_cos_mean', 'sslm_chroma_cos_var',
+                               'sslm_chroma_euc_mean', 'sslm_chroma_euc_var',
+                               'sslm_mfcc_cos_mean', 'sslm_mfcc_cos_var',
+                               'sslm_mfcc_euc_mean', 'sslm_mfcc_euc_var',  # ---{
+                               'chroma_cens_mean', 'chroma_cens_var',
+                               'chroma_cqt_mean', 'chroma_cqt_var',
+                               'chroma_stft_mean', 'chroma_stft_var',
+                               'mel_mean', 'mel_var',
+                               'mfcc_mean', 'mfcc_var',
+                               'spectral_bandwidth_mean', 'spectral_bandwidth_var',
+                               'spectral_centroid_mean', 'spectral_centroid_var',
+                               'spectral_contrast_mean', 'spectral_contrast_var',
+                               'spectral_flatness_mean', 'spectral_flatness_var',
+                               'spectral_rolloff_mean', 'spectral_rolloff_var',
+                               'poly_features_mean', 'poly_features_var',
+                               'tonnetz_mean', 'tonnetz_var',
+                               'zero_crossing_mean', 'zero_crossing_var',
+                               'tempogram_mean', 'tempogram_var',
+                               'fourier_tempo_mean', 'fourier_tempo_var',  # }---
+                               'formtype'])
+    label_encoder = LabelEncoder()
+    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
+    for indx, cur_data in enumerate(full_datagen):
+        if indx == len(mls_full):
+            break
+        c_flname = mls_full.getSong(indx)
+        c_sngdur = mls_full.getDuration(indx)
+        c_slmmls = cur_data[0][0]
+        c_scmcos = cur_data[0][1][0]
+        c_scmeuc = cur_data[0][1][1]
+        c_smfcos = cur_data[0][1][2]
+        c_smfeuc = cur_data[0][1][3]
+        c_midinf = cur_data[0][2]
+        c_flabel = cur_data[1]
+        c_flabel = label_encoder.inverse_transform(np.where(c_flabel == 1)[0])[0]
+
+        df.loc[indx] = [c_flname, c_sngdur, c_slmmls[0], c_slmmls[1], c_scmcos[0], c_scmcos[1],
+                        c_scmeuc[0], c_scmeuc[1], c_smfcos[0], c_smfcos[1], c_smfeuc[0], c_smfeuc[1],
+                        c_midinf[2], c_midinf[3], c_midinf[4], c_midinf[5], c_midinf[6], c_midinf[7],
+                        c_midinf[8], c_midinf[9], c_midinf[10], c_midinf[11], c_midinf[12], c_midinf[13],
+                        c_midinf[14], c_midinf[15], c_midinf[0], c_midinf[1], c_midinf[16], c_midinf[17],
+                        c_midinf[18], c_midinf[19], c_midinf[20], c_midinf[21], c_midinf[22], c_midinf[23],
+                        c_midinf[24], c_midinf[25], c_midinf[26], c_midinf[27], c_midinf[28], c_midinf[29], c_flabel]
+    # df.to_csv(os.path.join(MASTER_DIR, 'full_dataset.csv'), index=False)  # Improperly saves lists because of , delim
+    df.to_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'), index=False)
+
+
 """===================================================================================="""
 
 
-# region ModelDefinition
+# region OldModelDefinition
 # MIDI MODEL -- Try switching activation to ELU instead of RELU. Mimic visual/aural analysis using ensemble method
 def formnn_midi(output_channels=32, numclasses=12):
     inputC = layers.Input(shape=(None, 1))
@@ -719,7 +794,7 @@ def formnn_fuse(output_channels=32, lrval=0.0001, numclasses=12):
 # endregion
 
 
-def trainFormModel():
+def old_trainFormModel():
     batch_size = 10
 
     # region MODEL_DIRECTORIES
@@ -877,9 +952,6 @@ def trainFormModel():
 
     # Measure confidence level? Prediction Interval (PI)
     # https://medium.com/hal24k-techblog/how-to-generate-neural-network-confidence-intervals-with-keras-e4c0b78ebbdf
-
-    # TODO: move dataset to be the feature mean, rather than the set
-    # TODO: feed duration into model to see if it can detect a difference by length?
     # https://github.com/philipperemy/keract#display-the-activations-as-a-heatmap-overlaid-on-an-image
     # Check out humdrum dataset https://www.humdrum.org/
     # Josh Albrecht? https://www.kent.edu/music/joshua-albrecht
@@ -887,114 +959,153 @@ def trainFormModel():
 
     # TODO: create a dense model (RNN?) that uses the audio data to classify the peaks
     # https://towardsdatascience.com/10-minutes-to-building-a-cnn-binary-image-classifier-in-tensorflow-4e216b2034aa
-    # Use spectral centroids, https://musicinformationretrieval.com/spectral_features.html
     # Use novelty function for each song, save array of predicted peaks using np.save and load
     # Include duration as a feature!!!
 
-    # filename,length,chroma_stft_mean,chroma_stft_var,rms_mean,rms_var,
-    # spectral_centroid_mean,spectral_centroid_var,spectral_bandwidth_mean,
-    # spectral_bandwidth_var,rolloff_mean,rolloff_var,zero_crossing_rate_mean,
-    # zero_crossing_rate_var,harmony_mean,harmony_var,perceptr_mean,perceptr_var,
-    # tempo,mfcc1_mean,mfcc1_var,mfcc2_mean,mfcc2_var,mfcc3_mean,mfcc3_var,mfcc4_mean,
-    # mfcc4_var,mfcc5_mean,mfcc5_var,mfcc6_mean,mfcc6_var,mfcc7_mean,mfcc7_var,mfcc8_mean,
-    # mfcc8_var,mfcc9_mean,mfcc9_var,mfcc10_mean,mfcc10_var,mfcc11_mean,mfcc11_var,mfcc12_mean,
-    # mfcc12_var,mfcc13_mean,mfcc13_var,mfcc14_mean,mfcc14_var,mfcc15_mean,mfcc15_var,mfcc16_mean,
-    # mfcc16_var,mfcc17_mean,mfcc17_var,mfcc18_mean,mfcc18_var,mfcc19_mean,mfcc19_var,mfcc20_mean,mfcc20_var,label
 
+def trainFormModel():
+    df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))
+    names = df[['piece_name', 'composer', 'filename']]
+    y = df['formtype']
+    df.drop(columns=['spectral_bandwidth_var', 'spectral_centroid_var', 'spectral_flatness_var', 'spectral_rolloff_var',
+                     'zero_crossing_var', 'fourier_tempo_mean', 'fourier_tempo_var'], inplace=True)  # Remove useless
+    nonlist = df[['duration', 'spectral_contrast_var']]
+    df.drop(columns=['piece_name', 'composer', 'filename', 'duration', 'spectral_contrast_var', 'formtype'],
+            inplace=True)
 
-def create_form_dataset():
-    mls_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'MLS/'),
-                                   label_path=FULL_LABELPATH, batch_size=1, reshape=False)
-    sslm_cmcos_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_CRM_COS/'),
-                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
-    sslm_cmeuc_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_CRM_EUC/'),
-                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
-    sslm_mfcos_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_MFCC_COS/'),
-                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
-    sslm_mfeuc_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_MFCC_EUC/'),
-                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
-    midi_full = dus.BuildMIDIloader(os.path.join(FULL_DIR, 'MIDI/'),
-                                    label_path=FULL_LABELPATH, batch_size=1, reshape=False, building_df=True)
+    d = [pd.DataFrame(df[col].astype(str).apply(literal_eval).values.tolist()).add_prefix(col) for col in df.columns]
+    df = pd.concat(d, axis=1).fillna(0)
+    df = pd.concat([pd.concat([names, pd.concat([nonlist, df], axis=1)], axis=1), y], axis=1)  # print(df)
+    train, test = train_test_split(df, test_size=0.2, random_state=0, stratify=df['formtype'])
 
-    print("Done building dataloaders, merging...")
-    full_datagen = multi_input_generator(mls_full, sslm_cmcos_full, sslm_cmeuc_full, sslm_mfcos_full,
-                                         sslm_mfeuc_full, midi_full, concat=False, expand_dim_6=False)
-    print("Merging complete. Printing...")
+    X_train = train.iloc[:, 3:-1]
+    X_train_names = train.iloc[:, 0:3]
+    y_train = train.iloc[:, -1]
+    print("Train shape:", X_train.shape)
+    X_test = test.iloc[:, 3:-1]
+    X_test_names = test.iloc[:, 0:3]
+    y_test = test.iloc[:, -1]
+    print("Test shape:", X_test.shape)
 
-    df = pd.DataFrame(columns=['filename', 'duration', 'ssm_log_mel_mean', 'ssm_log_mel_var',
-                               'sslm_chroma_cos_mean', 'sslm_chroma_cos_var',
-                               'sslm_chroma_euc_mean', 'sslm_chroma_euc_var',
-                               'sslm_mfcc_cos_mean', 'sslm_mfcc_cos_var',
-                               'sslm_mfcc_euc_mean', 'sslm_mfcc_euc_var',  # ---{
-                               'chroma_cens_mean', 'chroma_cens_var',
-                               'chroma_cqt_mean', 'chroma_cqt_var',
-                               'chroma_stft_mean', 'chroma_stft_var',
-                               'mel_mean', 'mel_var',
-                               'mfcc_mean', 'mfcc_var',
-                               'spectral_bandwidth_mean', 'spectral_bandwidth_var',
-                               'spectral_centroid_mean', 'spectral_centroid_var',
-                               'spectral_contrast_mean', 'spectral_contrast_var',
-                               'spectral_flatness_mean', 'spectral_flatness_var',
-                               'spectral_rolloff_mean', 'spectral_rolloff_var',
-                               'poly_features_mean', 'poly_features_var',
-                               'tonnetz_mean', 'tonnetz_var',
-                               'zero_crossing_mean', 'zero_crossing_var',
-                               'tempogram_mean', 'tempogram_var',
-                               'fourier_tempo_mean', 'fourier_tempo_var',  # }---
-                               'formtype'])
+    # Normalize Data
+    min_max_scaler = preprocessing.MinMaxScaler()
+    X_train = min_max_scaler.fit_transform(X_train)
+    X_test = min_max_scaler.fit_transform(X_test)
+    print("Normalized Train shape:", X_train.shape)
+    print("Normalized Test shape:", X_test.shape)
+
+    # Convert to arrays for keras
+    X_train = np.array(X_train)
+    y_train = np.array(y_train)
+    X_test = np.array(X_test)
+    y_test = np.array(y_test)
+
     label_encoder = LabelEncoder()
-    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
-    for indx, cur_data in enumerate(full_datagen):
-        if indx == len(mls_full):
-            break
-        c_flname = mls_full.getSong(indx)
-        c_sngdur = mls_full.getDuration(indx)
-        c_slmmls = cur_data[0][0]
-        c_scmcos = cur_data[0][1][0]
-        c_scmeuc = cur_data[0][1][1]
-        c_smfcos = cur_data[0][1][2]
-        c_smfeuc = cur_data[0][1][3]
-        c_midinf = cur_data[0][2]
-        c_flabel = cur_data[1]
-        c_flabel = label_encoder.inverse_transform(np.where(c_flabel == 1)[0])[0]
+    y_train = to_categorical(label_encoder.fit_transform(y_train))
+    y_test = to_categorical(label_encoder.fit_transform(y_test))
+    print(y_train.shape, y_test.shape)
+    print(label_encoder.classes_, "\n")
 
-        df.loc[indx] = [c_flname, c_sngdur, c_slmmls[0], c_slmmls[1], c_scmcos[0], c_scmcos[1],
-                        c_scmeuc[0], c_scmeuc[1], c_smfcos[0], c_smfcos[1], c_smfeuc[0], c_smfeuc[1],
-                        c_midinf[2], c_midinf[3], c_midinf[4], c_midinf[5], c_midinf[6], c_midinf[7],
-                        c_midinf[8], c_midinf[9], c_midinf[10], c_midinf[11], c_midinf[12], c_midinf[13],
-                        c_midinf[14], c_midinf[15], c_midinf[0], c_midinf[1], c_midinf[16], c_midinf[17],
-                        c_midinf[18], c_midinf[19], c_midinf[20], c_midinf[21], c_midinf[22], c_midinf[23],
-                        c_midinf[24], c_midinf[25], c_midinf[26], c_midinf[27], c_midinf[28], c_midinf[29], c_flabel]
+    """ BASE MODEL """
+    # DummyClassifier makes predictions while ignoring input features
+    dummy_clf = DummyClassifier(strategy="stratified")
+    dummy_clf.fit(X_train, y_train)
+    DummyClassifier(strategy='stratified')
+    dummy_clf.predict(X_test)
+    print("Dummy classifier accuracy:", dummy_clf.score(X_test, y_test))
 
-    df.to_csv(os.path.join(MASTER_DIR, 'full_dataset.csv'), index=False)
+    clf = tree.DecisionTreeClassifier()
+    clf = clf.fit(X_train, y_train)
+    clf.predict(X_test)
+    print("Decision tree accuracy:", clf.score(X_test, y_test), "\n")
 
-    # TODO: csv representation
-    # filename, duration,
-    # ssm_log_mel_mean, ssm_log_mel_var,
-    # sslm_chroma_cos_mean,sslm_chroma_cos_var,
-    # sslm_chroma_euc_mean, sslm_chroma_euc_var,
-    # sslm_mfcc_cos_mean, sslm_mfcc_cos_var,
-    # sslm_mfcc_euc_mean, sslm_mfcc_euc_var,
-    # spectral_contrast_mean, spectral_contrast_var,
+    # Reshape to 3D tensor for keras
+    X_train = X_train[:, :, np.newaxis]
+    X_test = X_test[:, :, np.newaxis]
 
-    # chroma_stft_mean, chroma_stft_var,
-    # chroma_cqt_mean, chroma_cqt_var,
-    # chroma_cens_mean, chroma_cens_var,
-    # mel_mean, mel_var,
-    # mfcc_mean, mfcc_var,
-    # spectral_bandwidth_mean, spectral_bandwidth_var,
-    # spectral_centroid_mean, spectral_centroid_var,
-    # spectral_flatness_mean, spectral_flatness_var,
-    # spectral_rolloff_mean, spectral_rolloff_var,
-    # poly_features_mean, poly_features_var,
-    # tonnetz_mean, tonnetz_var,
-    # zero_crossing_mean, zero_crossing_var,
-    # tempogram_mean, tempogram_var,
-    # fourier_tempo_mean, fourier_tempo_var,
+    lrval = 0.0001
 
-    # formtype
+    model = tf.keras.Sequential()
+    model.add(layers.Conv1D(64, kernel_size=10, activation='relu', input_shape=(X_train.shape[1], 1)))
+    model.add(layers.Conv1D(128, kernel_size=10, activation='relu', kernel_regularizer=l2(0.01),
+                            bias_regularizer=l2(0.01)))
+    model.add(layers.MaxPooling1D(pool_size=6))
+    model.add(layers.Dropout(0.5))
+    model.add(layers.Conv1D(128, kernel_size=10, activation='relu'))
+    model.add(layers.MaxPooling1D(pool_size=6))
+    model.add(layers.Dropout(0.5))
+    model.add(layers.Flatten())
+    model.add(layers.Dense(256, activation='relu'))
+    model.add(layers.Dropout(0.5))
+    model.add(layers.Dense(len(label_encoder.classes_), activation='softmax'))
+    opt = keras.optimizers.Adam(lr=lrval, epsilon=1e-6)
+    # opt = keras.optimizers.SGD(lr=lrval, decay=1e-6, momentum=0.9, nesterov=True)
+    model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
+    model.summary()
 
-    # TODO: don't forget to normalize data after creating csv
+    early_stopping = EarlyStopping(patience=5, verbose=5, mode="auto")
+    checkpoint = ModelCheckpoint("best_form_model.hdf5", monitor='val_accuracy', verbose=0,
+                                 save_best_only=True, mode='max', save_freq='epoch', save_weights_only=True)
+    model_history = model.fit(X_train, y_train, batch_size=32, epochs=50, validation_data=(X_test, y_test),
+                              callbacks=[checkpoint, early_stopping])
+
+    print("\nEvaluating...")
+    score = model.evaluate(X_test, y_test, verbose=1)
+    print("Evaluation complete!\nScore:")
+    print(f"Loss: {score[0]}\tAccuracy: {score[1]}")
+
+    # region EvaluationGraphs
+    plt.plot(model_history.history['loss'])
+    plt.plot(model_history.history['val_loss'])
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['train', 'test'], loc='upper left')
+    plt.savefig('Initial_Model_Loss.png')
+    plt.show()
+
+    plt.plot(model_history.history['accuracy'])
+    plt.plot(model_history.history['val_accuracy'])
+    plt.title('Model Accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Test'], loc='upper left')
+    plt.savefig('Initial_Model_Accuracy.png')
+    plt.show()
+
+    pd.DataFrame(model_history.history).plot()
+    plt.show()
+    # endregion
+
+    predictions = model.predict(X_test, verbose=1)
+    predictions = predictions.argmax(axis=1)
+    predictions = predictions.astype(int).flatten()
+    predictions = (label_encoder.inverse_transform(predictions))
+    predictions = pd.DataFrame({'Predicted Values': predictions})
+
+    actual = y_test.argmax(axis=1)
+    actual = actual.astype(int).flatten()
+    actual = (label_encoder.inverse_transform(actual))
+    actual = pd.DataFrame({'Actual Values': actual})
+
+    cm = confusion_matrix(actual, predictions)
+    plt.figure(figsize=(12, 10))
+    cm = pd.DataFrame(cm, index=[i for i in label_encoder.classes_], columns=[i for i in label_encoder.classes_])
+    ax = sns.heatmap(cm, linecolor='white', cmap='Blues', linewidth=1, annot=True, fmt='')
+    bottom, top = ax.get_ylim()
+    ax.set_ylim(bottom + 0.5, top - 0.5)
+    plt.title('Confusion Matrix', size=20)
+    plt.xlabel('Predicted Labels', size=14)
+    plt.ylabel('Actual Labels', size=14)
+    plt.savefig('Initial_Model_Confusion_Matrix.png')
+    plt.show()
+    clf_report = classification_report(actual, predictions, output_dict=True,
+                                       target_names=[i for i in label_encoder.classes_])
+    sns.heatmap(pd.DataFrame(clf_report).iloc[:, :].T, annot=True, cmap='viridis')
+    plt.title('Classification Report', size=20)
+    plt.savefig('Initial_Model_Classification_Report.png')
+    plt.show()
+
     pass
 
 
@@ -1083,6 +1194,7 @@ def prepare_lstm_peaks():
 
 
 if __name__ == '__main__':
+    # TODO: don't forget to normalize data after creating csv
     print("Hello world!")
     # validate_directories()
     # get_total_duration()
@@ -1090,8 +1202,8 @@ if __name__ == '__main__':
     # prepare_model_training_input()
     # prepare_train_data()
     # buildValidationSet()
-    # trainFormModel()
+    trainFormModel()
     # prepare_lstm_peaks()
     # trainLabelModel()
-    create_form_dataset()
+    # create_form_dataset()
     print("\nDone!")
