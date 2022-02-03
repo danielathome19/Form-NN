@@ -963,6 +963,26 @@ def old_trainFormModel():
     # Include duration as a feature!!!
 
 
+def formnn_cnn(input_dim_1, filters=64, lrval=0.0001, numclasses=12):
+    model = tf.keras.Sequential()
+    model.add(layers.Conv1D(filters, kernel_size=10, activation='relu', input_shape=(input_dim_1, 1)))
+    model.add(layers.Conv1D(filters*2, kernel_size=10, activation='relu', kernel_regularizer=l2(0.01),
+                            bias_regularizer=l2(0.01)))
+    model.add(layers.MaxPooling1D(pool_size=6))
+    model.add(layers.Dropout(0.4))
+    model.add(layers.Conv1D(filters*2, kernel_size=10, activation='relu'))
+    model.add(layers.MaxPooling1D(pool_size=6))
+    model.add(layers.Dropout(0.4))
+    model.add(layers.Flatten())
+    model.add(layers.Dense(filters*4, activation='relu'))
+    model.add(layers.Dropout(0.4))
+    model.add(layers.Dense(numclasses, activation='softmax'))  # Try softmax?
+    # opt = keras.optimizers.Adam(lr=lrval, epsilon=1e-6)
+    opt = keras.optimizers.SGD(lr=lrval, decay=1e-6, momentum=0.9, nesterov=True)
+    model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
+    return model
+
+
 def trainFormModel():
     df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))
     names = df[['piece_name', 'composer', 'filename']]
@@ -976,7 +996,7 @@ def trainFormModel():
     d = [pd.DataFrame(df[col].astype(str).apply(literal_eval).values.tolist()).add_prefix(col) for col in df.columns]
     df = pd.concat(d, axis=1).fillna(0)
     df = pd.concat([pd.concat([names, pd.concat([nonlist, df], axis=1)], axis=1), y], axis=1)  # print(df)
-    train, test = train_test_split(df, test_size=0.2, random_state=0, stratify=df['formtype'])
+    train, test = train_test_split(df, test_size=0.3, random_state=0, stratify=df['formtype'])
 
     X_train = train.iloc[:, 3:-1]
     X_train_names = train.iloc[:, 0:3]
@@ -1023,35 +1043,21 @@ def trainFormModel():
     X_train = X_train[:, :, np.newaxis]
     X_test = X_test[:, :, np.newaxis]
 
-    lrval = 0.0001
-
-    model = tf.keras.Sequential()
-    model.add(layers.Conv1D(64, kernel_size=10, activation='relu', input_shape=(X_train.shape[1], 1)))
-    model.add(layers.Conv1D(128, kernel_size=10, activation='relu', kernel_regularizer=l2(0.01),
-                            bias_regularizer=l2(0.01)))
-    model.add(layers.MaxPooling1D(pool_size=6))
-    model.add(layers.Dropout(0.5))
-    model.add(layers.Conv1D(128, kernel_size=10, activation='relu'))
-    model.add(layers.MaxPooling1D(pool_size=6))
-    model.add(layers.Dropout(0.5))
-    model.add(layers.Flatten())
-    model.add(layers.Dense(256, activation='relu'))
-    model.add(layers.Dropout(0.5))
-    model.add(layers.Dense(len(label_encoder.classes_), activation='softmax'))
-    opt = keras.optimizers.Adam(lr=lrval, epsilon=1e-6)
-    # opt = keras.optimizers.SGD(lr=lrval, decay=1e-6, momentum=0.9, nesterov=True)
-    model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
+    model = formnn_cnn(X_train.shape[1], filters=64, lrval=0.0001, numclasses=len(label_encoder.classes_))
     model.summary()
+    if not os.path.isfile(os.path.join(MASTER_DIR, 'FormNN_CNN_Model_Diagram.png')):
+        plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_CNN_Model_Diagram.png'),
+                   show_shapes=True, show_layer_names=True, expand_nested=True, dpi=300)
 
-    early_stopping = EarlyStopping(patience=5, verbose=5, mode="auto")
+    # early_stopping = EarlyStopping(patience=5, verbose=5, mode="auto")
     checkpoint = ModelCheckpoint("best_form_model.hdf5", monitor='val_accuracy', verbose=0,
                                  save_best_only=True, mode='max', save_freq='epoch', save_weights_only=True)
-    model_history = model.fit(X_train, y_train, batch_size=32, epochs=50, validation_data=(X_test, y_test),
-                              callbacks=[checkpoint, early_stopping])
+    model_history = model.fit(X_train, y_train, batch_size=32, epochs=200, validation_data=(X_test, y_test),
+                              callbacks=[checkpoint])  # , early_stopping
 
     print("\nEvaluating...")
     score = model.evaluate(X_test, y_test, verbose=1)
-    print("Evaluation complete!\nScore:")
+    print("Evaluation complete!\n__________Score__________")
     print(f"Loss: {score[0]}\tAccuracy: {score[1]}")
 
     # region EvaluationGraphs
@@ -1075,7 +1081,6 @@ def trainFormModel():
 
     pd.DataFrame(model_history.history).plot()
     plt.show()
-    # endregion
 
     predictions = model.predict(X_test, verbose=1)
     predictions = predictions.argmax(axis=1)
@@ -1105,7 +1110,7 @@ def trainFormModel():
     plt.title('Classification Report', size=20)
     plt.savefig('Initial_Model_Classification_Report.png')
     plt.show()
-
+    # endregion
     pass
 
 
