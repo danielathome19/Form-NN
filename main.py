@@ -24,6 +24,7 @@ from keras.utils.vis_utils import plot_model
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import tensorflow.keras as keras
+from sklearn.svm import LinearSVC
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
 from tensorflow.keras.layers import Input, Flatten, Dropout, Activation, BatchNormalization, Dense
@@ -72,8 +73,13 @@ from sklearn import preprocessing
 import hyperas
 from hyperopt import Trials, STATUS_OK, tpe
 from hyperas.distributions import choice, uniform
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import f_classif
 from ast import literal_eval
+from sklearn.feature_selection import RFE
 from skimage.transform import resize
+import autokeras as ak
+from tensorflow.python.ops.init_ops_v2 import glorot_uniform
 
 k.set_image_data_format('channels_last')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -791,7 +797,6 @@ def formnn_fuse(output_channels=32, lrval=0.0001, numclasses=12):
         plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_Model_Diagram.png'),
                    show_shapes=True, show_layer_names=True, expand_nested=True, dpi=300)
     return model
-# endregion
 
 
 def old_trainFormModel():
@@ -963,7 +968,31 @@ def old_trainFormModel():
     # Include duration as a feature!!!
 
 
-def formnn_cnn(input_dim_1, filters=64, lrval=0.0001, numclasses=12):
+def formnn_cnn_mod(input_dim_1, filters=64, lrval=0.0001, numclasses=12):
+    model = tf.keras.Sequential()
+    model.add(layers.Conv1D(filters, kernel_size=10, activation='relu', input_shape=(input_dim_1, 1)))
+    model.add(layers.Dropout(0.4))  # ?
+    model.add(layers.Conv1D(filters*2, kernel_size=10, activation='relu', kernel_regularizer=l2(0.01),
+                            bias_regularizer=l2(0.01)))
+    model.add(layers.MaxPooling1D(pool_size=6))
+    model.add(layers.BatchNormalization())
+    model.add(layers.Dropout(0.4))
+    model.add(layers.Conv1D(filters*2, kernel_size=10, activation='relu'))
+    model.add(layers.MaxPooling1D(pool_size=6))
+    # model.add(layers.BatchNormalization())
+    model.add(layers.Dropout(0.4))
+    model.add(layers.Flatten())
+    model.add(layers.Dense(filters*4, activation='relu'))
+    # model.add(layers.BatchNormalization())
+    model.add(layers.Dropout(0.4))
+    model.add(layers.Dense(numclasses, activation='softmax'))  # Try softmax?
+    opt = keras.optimizers.Adam(lr=lrval, epsilon=1e-6)
+    # opt = keras.optimizers.SGD(lr=lrval, decay=1e-6, momentum=0.9, nesterov=True)
+    model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
+    return model
+
+
+def formnn_cnn_old(input_dim_1, filters=64, lrval=0.0001, numclasses=12):
     model = tf.keras.Sequential()
     model.add(layers.Conv1D(filters, kernel_size=10, activation='relu', input_shape=(input_dim_1, 1)))
     model.add(layers.Conv1D(filters*2, kernel_size=10, activation='relu', kernel_regularizer=l2(0.01),
@@ -981,6 +1010,50 @@ def formnn_cnn(input_dim_1, filters=64, lrval=0.0001, numclasses=12):
     opt = keras.optimizers.SGD(lr=lrval, decay=1e-6, momentum=0.9, nesterov=True)
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
     return model
+# endregion
+
+
+def formnn_cnn(input_dim_1, filters=8, lrval=0.0001, numclasses=12):
+    np.random.seed(9)
+    X_input = Input(shape=(input_dim_1, 1))
+
+    X = layers.Conv1D(filters, kernel_size=3, strides=1, kernel_initializer=glorot_uniform(seed=9),
+                      bias_regularizer=l2(0.5))(X_input)
+    X = layers.BatchNormalization(axis=2)(X)
+    X = layers.Activation('relu')(X)
+    X = layers.MaxPooling1D(2)(X)
+    # X = layers.Dropout(0.2)(X)
+
+    X = layers.Conv1D(filters * 2, kernel_size=3, strides=1, kernel_initializer=glorot_uniform(seed=9),
+                      bias_regularizer=l2(0.5))(X)
+    X = layers.BatchNormalization(axis=2)(X)
+    X = layers.Activation('relu')(X)
+    X = layers.MaxPooling1D(2)(X)
+    # X = layers.Dropout(0.4)(X)
+
+    X = layers.Conv1D(filters * 4, kernel_size=3, strides=1, kernel_initializer=glorot_uniform(seed=9),
+                      bias_regularizer=l2(0.5))(X)
+    X = layers.BatchNormalization(axis=2)(X)
+    X = layers.Activation('relu')(X)
+    X = layers.MaxPooling1D(2)(X)
+    # X = layers.Dropout(0.4)(X)
+
+    X = layers.Conv1D(filters * 8, kernel_size=3, strides=1, kernel_initializer=glorot_uniform(seed=9),
+                      bias_regularizer=l2(0.5))(X)
+    X = layers.BatchNormalization(axis=-1)(X)
+    X = layers.Activation('relu')(X)
+    X = layers.MaxPooling1D(2)(X)
+    # X = layers.Dropout(0.4)(X)
+
+    X = layers.Flatten()(X)
+
+    X = layers.Dense(numclasses, activation='softmax', kernel_initializer=glorot_uniform(seed=9),
+                     bias_regularizer=l2(0.5))(X)
+
+    opt = keras.optimizers.Adam(learning_rate=lrval)
+    model = keras.models.Model(inputs=X_input, outputs=X, name='FormModel')
+    model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
+    return model
 
 
 def trainFormModel():
@@ -996,7 +1069,8 @@ def trainFormModel():
     d = [pd.DataFrame(df[col].astype(str).apply(literal_eval).values.tolist()).add_prefix(col) for col in df.columns]
     df = pd.concat(d, axis=1).fillna(0)
     df = pd.concat([pd.concat([names, pd.concat([nonlist, df], axis=1)], axis=1), y], axis=1)  # print(df)
-    train, test = train_test_split(df, test_size=0.3, random_state=0, stratify=df['formtype'])
+    train, test = train_test_split(df, test_size=0.169, random_state=0, stratify=df['formtype'])  # 0.3 gave 31%
+    # df.to_csv(os.path.join(MASTER_DIR, 'full_modified_dataset.csv'))
 
     X_train = train.iloc[:, 3:-1]
     X_train_names = train.iloc[:, 0:3]
@@ -1021,6 +1095,7 @@ def trainFormModel():
     y_test = np.array(y_test)
 
     label_encoder = LabelEncoder()
+    old_y_train = y_train
     y_train = to_categorical(label_encoder.fit_transform(y_train))
     y_test = to_categorical(label_encoder.fit_transform(y_test))
     print(y_train.shape, y_test.shape)
@@ -1039,77 +1114,155 @@ def trainFormModel():
     clf.predict(X_test)
     print("Decision tree accuracy:", clf.score(X_test, y_test), "\n")
 
-    # Reshape to 3D tensor for keras
-    X_train = X_train[:, :, np.newaxis]
-    X_test = X_test[:, :, np.newaxis]
+    """ FEATURE TUNING """
+    # https://curiousily.com/posts/hackers-guide-to-fixing-underfitting-and-overfitting-models/
+    # https://towardsdatascience.com/handling-overfitting-in-deep-learning-models-c760ee047c6e
+    # https://machinelearningmastery.com/rfe-feature-selection-in-python/
+    selector = SelectKBest(f_classif, k=5000)
+    Z_train = selector.fit_transform(X_train, old_y_train)
+    skb_values = selector.get_support()
+    Z_test = X_test[:, skb_values]
+    print(Z_train.shape)
+    print(Z_test.shape)
+    """
+    plt.title('Feature Importance')
+    plt.ylabel('Score')
+    plt.xlabel('Feature')
+    plt.plot(selector.scores_)
+    plt.savefig('Initial_Feature_Importance.png')
+    plt.show()
+    """
+    print("Indices of top 10 features:", (-selector.scores_).argsort()[:10])
 
-    model = formnn_cnn(X_train.shape[1], filters=64, lrval=0.0001, numclasses=len(label_encoder.classes_))
+    """
+    # https://towardsdatascience.com/dont-overfit-how-to-prevent-overfitting-in-your-deep-learning-models-63274e552323
+    clf = LinearSVC(C=0.01, penalty="l1", dual=False)
+    clf.fit(X_train, old_y_train)
+    rfe_selector = RFE(clf, 10)
+    rfe_selector = rfe_selector.fit(X_train, old_y_train)
+    rfe_values = rfe_selector.get_support()
+    print("Indices of least important features:", np.where(rfe_values)[0])
+    """
+
+    """ KBEST MODEL """
+    clf = tree.DecisionTreeClassifier()
+    clf = clf.fit(Z_train, y_train)
+    clf.predict(Z_test)
+    print("K-Best Decision tree accuracy:", clf.score(Z_test, y_test), "\n")
+
+    # Reshape to 3D tensor for keras
+    X_train = Z_train[:, :, np.newaxis]
+    X_test = Z_test[:, :, np.newaxis]
+    # X_train = X_train[:, :, np.newaxis]
+    # X_test = X_test[:, :, np.newaxis]
+
+    model = formnn_cnn(X_train.shape[1], filters=8, lrval=0.00003, numclasses=len(label_encoder.classes_))
     model.summary()
     if not os.path.isfile(os.path.join(MASTER_DIR, 'FormNN_CNN_Model_Diagram.png')):
         plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_CNN_Model_Diagram.png'),
                    show_shapes=True, show_layer_names=True, expand_nested=True, dpi=300)
 
-    # early_stopping = EarlyStopping(patience=5, verbose=5, mode="auto")
-    checkpoint = ModelCheckpoint("best_form_model.hdf5", monitor='val_accuracy', verbose=0,
-                                 save_best_only=True, mode='max', save_freq='epoch', save_weights_only=True)
-    model_history = model.fit(X_train, y_train, batch_size=32, epochs=200, validation_data=(X_test, y_test),
-                              callbacks=[checkpoint])  # , early_stopping
+    history_loss = []
+    history_val_loss = []
+    history_accuracy = []
+    history_val_accuracy = []
+    num_epochs = 0
 
-    print("\nEvaluating...")
-    score = model.evaluate(X_test, y_test, verbose=1)
-    print("Evaluation complete!\n__________Score__________")
-    print(f"Loss: {score[0]}\tAccuracy: {score[1]}")
+    """
+    # Try predict
+    model.load_weights('best_form_model_50p.hdf5')
+    result = model.predict(X_test)
+    percent_correct = 0
+    pred_table = pd.DataFrame(columns=["Piece", "Predicted", "Actual"])
+    X_test_names = np.array(X_test_names)
+    for i in range(len(result)):
+        resultlbl = label_encoder.inverse_transform([np.argmax(result[i, :])])
+        actuallbl = label_encoder.inverse_transform([np.argmax(y_test[i, :])])
+        pred_table.loc[i] = ([X_test_names[i][2], resultlbl, actuallbl])
+        percent_correct += 1 if resultlbl == actuallbl else 0
+    print(pred_table.to_string(index=False))
+    print("Accuracy: " + str(float(percent_correct/len(result))*100) + "%")
+    return
+    """
 
-    # region EvaluationGraphs
-    plt.plot(model_history.history['loss'])
-    plt.plot(model_history.history['val_loss'])
-    plt.title('Model Loss')
-    plt.ylabel('Loss')
-    plt.xlabel('Epoch')
-    plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig('Initial_Model_Loss.png')
-    plt.show()
+    model.load_weights('best_form_model_44p.hdf5')
+    while True:
+        # early_stopping = EarlyStopping(monitor='val_loss', patience=5, verbose=5, mode="auto")
+        checkpoint = ModelCheckpoint("best_form_model.hdf5", monitor='val_accuracy', verbose=1,
+                                     save_best_only=False, mode='max', save_freq='epoch', save_weights_only=True)
+        model_history = model.fit(X_train, y_train, batch_size=32, epochs=1, validation_data=(X_test, y_test),
+                                  callbacks=[checkpoint])  # , early_stopping  epochs=2000 loss hits 0.7
 
-    plt.plot(model_history.history['accuracy'])
-    plt.plot(model_history.history['val_accuracy'])
-    plt.title('Model Accuracy')
-    plt.ylabel('Accuracy')
-    plt.xlabel('Epoch')
-    plt.legend(['Train', 'Test'], loc='upper left')
-    plt.savefig('Initial_Model_Accuracy.png')
-    plt.show()
+        history_loss.append(model_history.history['loss'])
+        history_val_loss.append(model_history.history['val_loss'])
+        history_accuracy.append(model_history.history['accuracy'])
+        history_val_accuracy.append(model_history.history['val_accuracy'])
 
-    pd.DataFrame(model_history.history).plot()
-    plt.show()
+        print("\nEvaluating...")
+        score = model.evaluate(X_test, y_test, verbose=1)
+        print("Evaluation complete!\n__________Score__________")
+        print(f"Loss: {score[0]}\tAccuracy: {score[1]}")
 
-    predictions = model.predict(X_test, verbose=1)
-    predictions = predictions.argmax(axis=1)
-    predictions = predictions.astype(int).flatten()
-    predictions = (label_encoder.inverse_transform(predictions))
-    predictions = pd.DataFrame({'Predicted Values': predictions})
+        num_epochs += 1
+        print("Epochs completed:", num_epochs)
 
-    actual = y_test.argmax(axis=1)
-    actual = actual.astype(int).flatten()
-    actual = (label_encoder.inverse_transform(actual))
-    actual = pd.DataFrame({'Actual Values': actual})
+        if score[1] >= 0.51:
+            # region EvaluationGraphs
+            plt.plot(history_loss)  # plt.plot(model_history.history['loss'])
+            plt.plot(history_val_loss)  # plt.plot(model_history.history['val_loss'])
+            plt.title('Model Loss')
+            plt.ylabel('Loss')
+            plt.xlabel('Epoch')
+            plt.legend(['train', 'test'], loc='upper left')
+            plt.savefig('Initial_Model_Loss.png')
+            plt.show()
 
-    cm = confusion_matrix(actual, predictions)
-    plt.figure(figsize=(12, 10))
-    cm = pd.DataFrame(cm, index=[i for i in label_encoder.classes_], columns=[i for i in label_encoder.classes_])
-    ax = sns.heatmap(cm, linecolor='white', cmap='Blues', linewidth=1, annot=True, fmt='')
-    bottom, top = ax.get_ylim()
-    ax.set_ylim(bottom + 0.5, top - 0.5)
-    plt.title('Confusion Matrix', size=20)
-    plt.xlabel('Predicted Labels', size=14)
-    plt.ylabel('Actual Labels', size=14)
-    plt.savefig('Initial_Model_Confusion_Matrix.png')
-    plt.show()
-    clf_report = classification_report(actual, predictions, output_dict=True,
-                                       target_names=[i for i in label_encoder.classes_])
-    sns.heatmap(pd.DataFrame(clf_report).iloc[:, :].T, annot=True, cmap='viridis')
-    plt.title('Classification Report', size=20)
-    plt.savefig('Initial_Model_Classification_Report.png')
-    plt.show()
+            plt.plot(history_accuracy)  # plt.plot(model_history.history['accuracy'])
+            plt.plot(history_val_accuracy)  # plt.plot(model_history.history['val_accuracy'])
+            plt.title('Model Accuracy')
+            plt.ylabel('Accuracy')
+            plt.xlabel('Epoch')
+            plt.legend(['Train', 'Test'], loc='upper left')
+            plt.savefig('Initial_Model_Accuracy.png')
+            plt.show()
+
+            # pd.DataFrame(model_history.history).plot()
+            # plt.show()
+
+            predictions = model.predict(X_test, verbose=1)
+            predictions = predictions.argmax(axis=1)
+            predictions = predictions.astype(int).flatten()
+            predictions = (label_encoder.inverse_transform(predictions))
+            predictions = pd.DataFrame({'Predicted Values': predictions})
+
+            actual = y_test.argmax(axis=1)
+            actual = actual.astype(int).flatten()
+            actual = (label_encoder.inverse_transform(actual))
+            actual = pd.DataFrame({'Actual Values': actual})
+
+            cm = confusion_matrix(actual, predictions)
+            plt.figure(figsize=(12, 10))
+            cm = pd.DataFrame(cm, index=[i for i in label_encoder.classes_], columns=[i for i in label_encoder.classes_])
+            ax = sns.heatmap(cm, linecolor='white', cmap='Blues', linewidth=1, annot=True, fmt='')
+            bottom, top = ax.get_ylim()
+            ax.set_ylim(bottom + 0.5, top - 0.5)
+            plt.title('Confusion Matrix', size=20)
+            plt.xlabel('Predicted Labels', size=14)
+            plt.ylabel('Actual Labels', size=14)
+            plt.savefig('Initial_Model_Confusion_Matrix.png')
+            plt.show()
+            clf_report = classification_report(actual, predictions, output_dict=True,
+                                               target_names=[i for i in label_encoder.classes_])
+            sns.heatmap(pd.DataFrame(clf_report).iloc[:, :].T, annot=True, cmap='viridis')
+            plt.title('Classification Report', size=20)
+            plt.savefig('Initial_Model_Classification_Report.png')
+            plt.show()
+            break
+
+        elif num_epochs >= 50:
+            model.load_weights('best_form_model_44p.hdf5')
+            num_epochs = 0
+            continue
     # endregion
     pass
 
