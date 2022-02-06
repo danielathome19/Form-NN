@@ -98,6 +98,13 @@ MASTER_INPUT_DIR = 'F:/Master Thesis Input/'
 MASTER_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/')
 
 MIDI_Data_Dir = np.array(gb.glob(os.path.join(MASTER_DIR, 'Data/MIDIs/*')))
+FULL_DIR = os.path.join(MASTER_INPUT_DIR, 'Full/')
+FULL_LABELPATH = os.path.join(MASTER_LABELPATH, 'Full/')
+# endregion
+
+
+# region DEPRECATED
+# Deprecated
 Train_Data_Dir = np.array(gb.glob(os.path.join(MASTER_INPUT_DIR, 'Train/*')))  # os.path.join(MASTER_DIR, 'Data/Train/*'
 Test_Data_Dir = np.array(gb.glob(os.path.join(MASTER_INPUT_DIR, 'Test/*')))  # os.path.join(MASTER_DIR, 'Data/Test/*')))
 Validate_Data_Dir = np.array(gb.glob(os.path.join(MASTER_INPUT_DIR, 'Validate/*')))  # os.path.join(MASTER_DIR,'Data/Val
@@ -107,19 +114,108 @@ SSLMCOS_Data_Dir = os.path.join(MASTER_DIR, 'Images/Train/SSLMCOS/')
 SSLMEUC_Data_Dir = os.path.join(MASTER_DIR, 'Images/Train/SSLMEUC/')
 SSLMCRM_Data_Dir = os.path.join(MASTER_DIR, 'Images/Train/SSLMCRM/')
 
-FULL_DIR = os.path.join(MASTER_INPUT_DIR, 'Full/')
 TRAIN_DIR = os.path.join(MASTER_INPUT_DIR, 'Train/')
 TEST_DIR = os.path.join(MASTER_INPUT_DIR, 'Test/')
 VAL_DIR = os.path.join(MASTER_INPUT_DIR, 'Validate/')
 
-FULL_LABELPATH = os.path.join(MASTER_LABELPATH, 'Full/')
 TRAIN_LABELPATH = os.path.join(MASTER_LABELPATH, 'Train/')
 TEST_LABELPATH = os.path.join(MASTER_LABELPATH, 'Test/')
 VAL_LABELPATH = os.path.join(MASTER_LABELPATH, 'Validate/')
-# endregion
 
 
-# region DEPRECATED
+# Deprecated
+def get_class_weights(labels, one_hot=False):
+    if one_hot is False:
+        n_classes = max(labels) + 1
+    else:
+        n_classes = len(labels[0])
+    class_counts = [0 for _ in range(int(n_classes))]
+    if one_hot is False:
+        for label in labels:
+            class_counts[label] += 1
+    else:
+        for label in labels:
+            class_counts[np.where(label == 1)[0][0]] += 1
+    return {i: (1. / class_counts[i]) * float(len(labels)) / float(n_classes) for i in range(int(n_classes))}
+
+
+# Deprecated
+def buildValidationSet():
+    cnt = 1
+    numtrainfiles = len(fnmatch.filter(os.listdir(os.path.join(TRAIN_DIR, "MLS/")), '*.npy'))
+    for file in os.listdir(os.path.join(TRAIN_DIR, "MLS/")):
+        numvalfiles = len(fnmatch.filter(os.listdir(os.path.join(VAL_DIR, "MLS/")), '*.npy'))
+        if numvalfiles >= numtrainfiles * 0.2:
+            print(f"Validation set >= 20% of training set: {numvalfiles}/{numtrainfiles}")
+            break
+        filename, name = file, file.split('/')[-1].split('.')[0]
+        print(f"\nWorking on {os.path.basename(name)}, file #" + str(cnt))
+        formfolder = ""  # Start search for correct form to search for label
+        for root, dirs, files in os.walk(os.path.join(MASTER_DIR, 'Labels/')):
+            flag = False
+            for tfile in files:
+                if tfile.split('/')[-1].split('.')[0] == name:
+                    formfolder = os.path.join(root, file).split('/')[-1].split('\\')[0]
+                    flag = True
+            if flag:
+                break
+
+        path = os.path.join(os.path.join(MASTER_DIR, 'Labels/'), formfolder) + '/' + os.path.basename(name) + '.txt'
+        num_lines = sum(1 for _ in open(path))
+        if num_lines <= 2:
+            print("File has not been labeled with ground truth yet. Skipping...")
+            cnt += 1
+            continue
+        else:
+            src1 = os.path.join(TRAIN_DIR, "MLS/") + '/' + filename
+            src2 = os.path.join(TRAIN_DIR, "SSLM_CRM_COS/") + '/' + filename
+            src3 = os.path.join(TRAIN_DIR, "SSLM_CRM_EUC/") + '/' + filename
+            src4 = os.path.join(TRAIN_DIR, "SSLM_MFCC_COS/") + '/' + filename
+            src5 = os.path.join(TRAIN_DIR, "SSLM_MFCC_EUC/") + '/' + filename
+            dst1 = os.path.join(VAL_DIR, "MLS/") + '/' + filename
+            dst2 = os.path.join(VAL_DIR, "SSLM_CRM_COS/") + '/' + filename
+            dst3 = os.path.join(VAL_DIR, "SSLM_CRM_EUC/") + '/' + filename
+            dst4 = os.path.join(VAL_DIR, "SSLM_MFCC_COS/") + '/' + filename
+            dst5 = os.path.join(VAL_DIR, "SSLM_MFCC_EUC/") + '/' + filename
+            if os.path.exists(dst1) and os.path.exists(dst2) and os.path.exists(dst3) and os.path.exists(dst4) \
+                    and os.path.exists(dst5):
+                print("File has already been prepared for training material. Skipping...")
+                cnt += 1
+                continue
+            else:
+                copyfile(src1, dst1)
+                copyfile(src2, dst2)
+                copyfile(src3, dst3)
+                copyfile(src4, dst4)
+                copyfile(src5, dst5)
+
+        cnt += 1
+    pass
+
+
+# Deprecated
+def findBestShape(mls_train, sslm_train):
+    dim1_mls = [i.shape[0] for i in mls_train.getImages()]
+    dim2_mls = [i.shape[1] for i in mls_train.getImages()]
+    print(dim1_mls)
+    print(dim2_mls)
+
+    dim1_sslm = [i.shape[0] for i in sslm_train.getImages()]
+    dim2_sslm = [i.shape[1] for i in sslm_train.getImages()]
+    print(dim1_sslm)
+    print(dim2_sslm)
+
+    dim1_mean = min(statistics.mean(dim1_mls), statistics.mean(dim2_sslm))
+    dim2_mean = min(statistics.mean(dim1_mls), statistics.mean(dim2_sslm))
+
+    dim1_median = min(statistics.median(dim1_mls), statistics.median(dim2_sslm))
+    dim2_median = min(statistics.median(dim1_mls), statistics.median(dim2_sslm))
+
+    dim1_mode = min(statistics.mode(dim1_mls), statistics.mode(dim2_sslm))
+    dim2_mode = min(statistics.mode(dim1_mls), statistics.mode(dim2_sslm))
+
+    print(f"Dimension 0:\nMean: {dim1_mean}\t\tMedian: {dim1_median}\t\tMode: {dim1_mode}")
+    print(f"Dimension 1:\nMean: {dim2_mean}\t\tMedian: {dim2_median}\t\tMode: {dim2_mode}")
 # Deprecated WORKING FUSE MODEL
 def old_formnn_fuse(output_channels=32, lrval=0.00001, numclasses=12):
     cnn1_mel = formnn_mls(output_channels, lrval=lrval)
@@ -427,19 +523,37 @@ def get_total_duration():
     return dur_sum
 
 
-def get_class_weights(labels, one_hot=False):
-    if one_hot is False:
-        n_classes = max(labels) + 1
-    else:
-        n_classes = len(labels[0])
-    class_counts = [0 for _ in range(int(n_classes))]
-    if one_hot is False:
-        for label in labels:
-            class_counts[label] += 1
-    else:
-        for label in labels:
-            class_counts[np.where(label == 1)[0][0]] += 1
-    return {i: (1. / class_counts[i]) * float(len(labels)) / float(n_classes) for i in range(int(n_classes))}
+def prepare_model_training_input():
+    print("Preparing MLS inputs")
+    dus.util_main(feature="mls")
+
+    print("\nPreparing SSLM-MFCC-COS inputs")
+    dus.util_main(feature="mfcc", mode="cos")
+    print("\nPreparing SSLM-MFCC-EUC inputs")
+    dus.util_main(feature="mfcc", mode="euc")
+
+    print("\nPreparing SSLM-CRM-COS inputs")
+    dus.util_main(feature="chroma", mode="cos")
+    print("\nPreparing SSLM-CRM-EUC inputs")
+    dus.util_main(feature="chroma", mode="euc")
+
+
+def validate_directories():
+    print("Validating Training Directory...")
+    dus.validate_folder_contents(TRAIN_LABELPATH, os.path.join(TRAIN_DIR, 'MIDI/'), os.path.join(TRAIN_DIR, 'MLS/'),
+                                 os.path.join(TRAIN_DIR, 'SSLM_CRM_COS/'), os.path.join(TRAIN_DIR, 'SSLM_CRM_EUC/'),
+                                 os.path.join(TRAIN_DIR, 'SSLM_MFCC_COS/'), os.path.join(TRAIN_DIR, 'SSLM_MFCC_EUC/'))
+    print("Succes.\n")
+    print("Validating Validation Directory...")
+    dus.validate_folder_contents(VAL_LABELPATH, os.path.join(VAL_DIR, 'MIDI/'), os.path.join(VAL_DIR, 'MLS/'),
+                                 os.path.join(VAL_DIR, 'SSLM_CRM_COS/'), os.path.join(VAL_DIR, 'SSLM_CRM_EUC/'),
+                                 os.path.join(VAL_DIR, 'SSLM_MFCC_COS/'), os.path.join(VAL_DIR, 'SSLM_MFCC_EUC/'))
+    print("Succes.\n")
+    print("Validating Testing Directory...")
+    dus.validate_folder_contents(TEST_LABELPATH, os.path.join(TEST_DIR, 'MIDI/'), os.path.join(TEST_DIR, 'MLS/'),
+                                 os.path.join(TEST_DIR, 'SSLM_CRM_COS/'), os.path.join(TEST_DIR, 'SSLM_CRM_EUC/'),
+                                 os.path.join(TEST_DIR, 'SSLM_MFCC_COS/'), os.path.join(TEST_DIR, 'SSLM_MFCC_EUC/'))
+    print("Succes.\n")
 
 
 def multi_input_generator_helper(gen1, gen2, gen3, gen4, concat=True):
@@ -478,114 +592,30 @@ def multi_input_generator(gen1, gen2, gen3, gen4, gen5, gen6, feature=2, concat=
         yield [mlsimg, sslmimgs, tf.expand_dims(next(gen6)[0], axis=0)], mlsgen[1][feature]
 
 
-def prepare_model_training_input():
-    print("Preparing MLS inputs")
-    dus.util_main(feature="mls")
-
-    print("\nPreparing SSLM-MFCC-COS inputs")
-    dus.util_main(feature="mfcc", mode="cos")
-    print("\nPreparing SSLM-MFCC-EUC inputs")
-    dus.util_main(feature="mfcc", mode="euc")
-
-    print("\nPreparing SSLM-CRM-COS inputs")
-    dus.util_main(feature="chroma", mode="cos")
-    print("\nPreparing SSLM-CRM-EUC inputs")
-    dus.util_main(feature="chroma", mode="euc")
-
-
-def validate_directories():
-    print("Validating Training Directory...")
-    dus.validate_folder_contents(TRAIN_LABELPATH, os.path.join(TRAIN_DIR, 'MIDI/'), os.path.join(TRAIN_DIR, 'MLS/'),
-                                 os.path.join(TRAIN_DIR, 'SSLM_CRM_COS/'), os.path.join(TRAIN_DIR, 'SSLM_CRM_EUC/'),
-                                 os.path.join(TRAIN_DIR, 'SSLM_MFCC_COS/'), os.path.join(TRAIN_DIR, 'SSLM_MFCC_EUC/'))
-    print("Succes.\n")
-    print("Validating Validation Directory...")
-    dus.validate_folder_contents(VAL_LABELPATH, os.path.join(VAL_DIR, 'MIDI/'), os.path.join(VAL_DIR, 'MLS/'),
-                                 os.path.join(VAL_DIR, 'SSLM_CRM_COS/'), os.path.join(VAL_DIR, 'SSLM_CRM_EUC/'),
-                                 os.path.join(VAL_DIR, 'SSLM_MFCC_COS/'), os.path.join(VAL_DIR, 'SSLM_MFCC_EUC/'))
-    print("Succes.\n")
-    print("Validating Testing Directory...")
-    dus.validate_folder_contents(TEST_LABELPATH, os.path.join(TEST_DIR, 'MIDI/'), os.path.join(TEST_DIR, 'MLS/'),
-                                 os.path.join(TEST_DIR, 'SSLM_CRM_COS/'), os.path.join(TEST_DIR, 'SSLM_CRM_EUC/'),
-                                 os.path.join(TEST_DIR, 'SSLM_MFCC_COS/'), os.path.join(TEST_DIR, 'SSLM_MFCC_EUC/'))
-    print("Succes.\n")
-
-
-def buildValidationSet():
-    cnt = 1
-    numtrainfiles = len(fnmatch.filter(os.listdir(os.path.join(TRAIN_DIR, "MLS/")), '*.npy'))
-    for file in os.listdir(os.path.join(TRAIN_DIR, "MLS/")):
-        numvalfiles = len(fnmatch.filter(os.listdir(os.path.join(VAL_DIR, "MLS/")), '*.npy'))
-        if numvalfiles >= numtrainfiles * 0.2:
-            print(f"Validation set >= 20% of training set: {numvalfiles}/{numtrainfiles}")
-            break
-        filename, name = file, file.split('/')[-1].split('.')[0]
-        print(f"\nWorking on {os.path.basename(name)}, file #" + str(cnt))
-        formfolder = ""  # Start search for correct form to search for label
-        for root, dirs, files in os.walk(os.path.join(MASTER_DIR, 'Labels/')):
-            flag = False
-            for tfile in files:
-                if tfile.split('/')[-1].split('.')[0] == name:
-                    formfolder = os.path.join(root, file).split('/')[-1].split('\\')[0]
-                    flag = True
-            if flag:
-                break
-
-        path = os.path.join(os.path.join(MASTER_DIR, 'Labels/'), formfolder) + '/' + os.path.basename(name) + '.txt'
-        num_lines = sum(1 for _ in open(path))
-        if num_lines <= 2:
-            print("File has not been labeled with ground truth yet. Skipping...")
-            cnt += 1
-            continue
-        else:
-            src1 = os.path.join(TRAIN_DIR, "MLS/") + '/' + filename
-            src2 = os.path.join(TRAIN_DIR, "SSLM_CRM_COS/") + '/' + filename
-            src3 = os.path.join(TRAIN_DIR, "SSLM_CRM_EUC/") + '/' + filename
-            src4 = os.path.join(TRAIN_DIR, "SSLM_MFCC_COS/") + '/' + filename
-            src5 = os.path.join(TRAIN_DIR, "SSLM_MFCC_EUC/") + '/' + filename
-            dst1 = os.path.join(VAL_DIR, "MLS/") + '/' + filename
-            dst2 = os.path.join(VAL_DIR, "SSLM_CRM_COS/") + '/' + filename
-            dst3 = os.path.join(VAL_DIR, "SSLM_CRM_EUC/") + '/' + filename
-            dst4 = os.path.join(VAL_DIR, "SSLM_MFCC_COS/") + '/' + filename
-            dst5 = os.path.join(VAL_DIR, "SSLM_MFCC_EUC/") + '/' + filename
-            if os.path.exists(dst1) and os.path.exists(dst2) and os.path.exists(dst3) and os.path.exists(dst4) \
-                    and os.path.exists(dst5):
-                print("File has already been prepared for training material. Skipping...")
-                cnt += 1
-                continue
-            else:
-                copyfile(src1, dst1)
-                copyfile(src2, dst2)
-                copyfile(src3, dst3)
-                copyfile(src4, dst4)
-                copyfile(src5, dst5)
-
-        cnt += 1
-    pass
-
-
-def findBestShape(mls_train, sslm_train):
-    dim1_mls = [i.shape[0] for i in mls_train.getImages()]
-    dim2_mls = [i.shape[1] for i in mls_train.getImages()]
-    print(dim1_mls)
-    print(dim2_mls)
-
-    dim1_sslm = [i.shape[0] for i in sslm_train.getImages()]
-    dim2_sslm = [i.shape[1] for i in sslm_train.getImages()]
-    print(dim1_sslm)
-    print(dim2_sslm)
-
-    dim1_mean = min(statistics.mean(dim1_mls), statistics.mean(dim2_sslm))
-    dim2_mean = min(statistics.mean(dim1_mls), statistics.mean(dim2_sslm))
-
-    dim1_median = min(statistics.median(dim1_mls), statistics.median(dim2_sslm))
-    dim2_median = min(statistics.median(dim1_mls), statistics.median(dim2_sslm))
-
-    dim1_mode = min(statistics.mode(dim1_mls), statistics.mode(dim2_sslm))
-    dim2_mode = min(statistics.mode(dim1_mls), statistics.mode(dim2_sslm))
-
-    print(f"Dimension 0:\nMean: {dim1_mean}\t\tMedian: {dim1_median}\t\tMode: {dim1_mode}")
-    print(f"Dimension 1:\nMean: {dim2_mean}\t\tMedian: {dim2_median}\t\tMode: {dim2_mode}")
+def get_column_dataframe():
+    df = pd.DataFrame(columns=['piece_name', 'composer', 'filename', 'duration',
+                               'ssm_log_mel_mean', 'ssm_log_mel_var',
+                               'sslm_chroma_cos_mean', 'sslm_chroma_cos_var',
+                               'sslm_chroma_euc_mean', 'sslm_chroma_euc_var',
+                               'sslm_mfcc_cos_mean', 'sslm_mfcc_cos_var',
+                               'sslm_mfcc_euc_mean', 'sslm_mfcc_euc_var',  # ---{
+                               'chroma_cens_mean', 'chroma_cens_var',
+                               'chroma_cqt_mean', 'chroma_cqt_var',
+                               'chroma_stft_mean', 'chroma_stft_var',
+                               'mel_mean', 'mel_var',
+                               'mfcc_mean', 'mfcc_var',
+                               'spectral_bandwidth_mean', 'spectral_bandwidth_var',
+                               'spectral_centroid_mean', 'spectral_centroid_var',
+                               'spectral_contrast_mean', 'spectral_contrast_var',
+                               'spectral_flatness_mean', 'spectral_flatness_var',
+                               'spectral_rolloff_mean', 'spectral_rolloff_var',
+                               'poly_features_mean', 'poly_features_var',
+                               'tonnetz_mean', 'tonnetz_var',
+                               'zero_crossing_mean', 'zero_crossing_var',
+                               'tempogram_mean', 'tempogram_var',
+                               'fourier_tempo_mean', 'fourier_tempo_var',  # }---
+                               'formtype'])
+    return df
 
 
 def create_form_dataset():
@@ -611,27 +641,7 @@ def create_form_dataset():
         lambda x: repr(x).replace('(', '').replace(')', '').replace('array', '').replace("       ", ' '), repr=False)
     np.set_printoptions(threshold=inf)
 
-    df = pd.DataFrame(columns=['filename', 'duration', 'ssm_log_mel_mean', 'ssm_log_mel_var',
-                               'sslm_chroma_cos_mean', 'sslm_chroma_cos_var',
-                               'sslm_chroma_euc_mean', 'sslm_chroma_euc_var',
-                               'sslm_mfcc_cos_mean', 'sslm_mfcc_cos_var',
-                               'sslm_mfcc_euc_mean', 'sslm_mfcc_euc_var',  # ---{
-                               'chroma_cens_mean', 'chroma_cens_var',
-                               'chroma_cqt_mean', 'chroma_cqt_var',
-                               'chroma_stft_mean', 'chroma_stft_var',
-                               'mel_mean', 'mel_var',
-                               'mfcc_mean', 'mfcc_var',
-                               'spectral_bandwidth_mean', 'spectral_bandwidth_var',
-                               'spectral_centroid_mean', 'spectral_centroid_var',
-                               'spectral_contrast_mean', 'spectral_contrast_var',
-                               'spectral_flatness_mean', 'spectral_flatness_var',
-                               'spectral_rolloff_mean', 'spectral_rolloff_var',
-                               'poly_features_mean', 'poly_features_var',
-                               'tonnetz_mean', 'tonnetz_var',
-                               'zero_crossing_mean', 'zero_crossing_var',
-                               'tempogram_mean', 'tempogram_var',
-                               'fourier_tempo_mean', 'fourier_tempo_var',  # }---
-                               'formtype'])
+    df = get_column_dataframe()
     label_encoder = LabelEncoder()
     label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
     for indx, cur_data in enumerate(full_datagen):
@@ -648,7 +658,7 @@ def create_form_dataset():
         c_flabel = cur_data[1]
         c_flabel = label_encoder.inverse_transform(np.where(c_flabel == 1)[0])[0]
 
-        df.loc[indx] = [c_flname, c_sngdur, c_slmmls[0], c_slmmls[1], c_scmcos[0], c_scmcos[1],
+        df.loc[indx] = ["", "", c_flname, c_sngdur, c_slmmls[0], c_slmmls[1], c_scmcos[0], c_scmcos[1],
                         c_scmeuc[0], c_scmeuc[1], c_smfcos[0], c_smfcos[1], c_smfeuc[0], c_smfeuc[1],
                         c_midinf[2], c_midinf[3], c_midinf[4], c_midinf[5], c_midinf[6], c_midinf[7],
                         c_midinf[8], c_midinf[9], c_midinf[10], c_midinf[11], c_midinf[12], c_midinf[13],
@@ -784,7 +794,6 @@ def formnn_fuse(output_channels=32, lrval=0.0001, numclasses=12):
     # opt = keras.optimizers.SGD(lr=lrval, decay=1e-6, momentum=0.9, nesterov=True)
     opt = keras.optimizers.Adam(lr=lrval, epsilon=1e-6)
 
-    # TODO: make simpler model, got better accuracy from removing ZeroPadding and Conv layers
     imgmodel = keras.models.Model(inputs=[cnn1_mel.input, cnn1_sslm.input], outputs=[cnn2_in])
     midmodel = formnn_midi(output_channels, numclasses=numclasses)
     averageOut = layers.Average()([imgmodel.output, midmodel.output])
@@ -955,18 +964,6 @@ def old_trainFormModel():
     plt.show()
     # endregion
 
-    # Measure confidence level? Prediction Interval (PI)
-    # https://medium.com/hal24k-techblog/how-to-generate-neural-network-confidence-intervals-with-keras-e4c0b78ebbdf
-    # https://github.com/philipperemy/keract#display-the-activations-as-a-heatmap-overlaid-on-an-image
-    # Check out humdrum dataset https://www.humdrum.org/
-    # Josh Albrecht? https://www.kent.edu/music/joshua-albrecht
-    # Publish in Society for Music Theorists? SMT - Due mid-Feb., conference in Nov.
-
-    # TODO: create a dense model (RNN?) that uses the audio data to classify the peaks
-    # https://towardsdatascience.com/10-minutes-to-building-a-cnn-binary-image-classifier-in-tensorflow-4e216b2034aa
-    # Use novelty function for each song, save array of predicted peaks using np.save and load
-    # Include duration as a feature!!!
-
 
 def formnn_cnn_mod(input_dim_1, filters=64, lrval=0.0001, numclasses=12):
     model = tf.keras.Sequential()
@@ -1112,7 +1109,12 @@ def trainFormModel():
     clf = tree.DecisionTreeClassifier()
     clf = clf.fit(X_train, y_train)
     clf.predict(X_test)
-    print("Decision tree accuracy:", clf.score(X_test, y_test), "\n")
+    print("Decision tree accuracy:", clf.score(X_test, y_test))
+
+    clf = RandomForestClassifier(n_estimators=64)
+    clf.fit(X_train, y_train)
+    clf.predict(X_test)
+    print("Random forest accuracy:", clf.score(X_test, y_test), "\n")
 
     """ FEATURE TUNING """
     # https://curiousily.com/posts/hackers-guide-to-fixing-underfitting-and-overfitting-models/
@@ -1122,6 +1124,7 @@ def trainFormModel():
     Z_train = selector.fit_transform(X_train, old_y_train)
     skb_values = selector.get_support()
     Z_test = X_test[:, skb_values]
+    # np.save(os.path.join(MASTER_DIR, "selectkbest_indicies.npy"), skb_values)
     print(Z_train.shape)
     print(Z_test.shape)
     """
@@ -1133,7 +1136,6 @@ def trainFormModel():
     plt.show()
     """
     print("Indices of top 10 features:", (-selector.scores_).argsort()[:10])
-
     """
     # https://towardsdatascience.com/dont-overfit-how-to-prevent-overfitting-in-your-deep-learning-models-63274e552323
     clf = LinearSVC(C=0.01, penalty="l1", dual=False)
@@ -1148,7 +1150,12 @@ def trainFormModel():
     clf = tree.DecisionTreeClassifier()
     clf = clf.fit(Z_train, y_train)
     clf.predict(Z_test)
-    print("K-Best Decision tree accuracy:", clf.score(Z_test, y_test), "\n")
+    print("K-Best Decision tree accuracy:", clf.score(Z_test, y_test))
+
+    clf = RandomForestClassifier(n_estimators=128)
+    clf.fit(X_train, y_train)
+    clf.predict(X_test)
+    print("K-Best Random forest accuracy:", clf.score(X_test, y_test), "\n")
 
     # Reshape to 3D tensor for keras
     X_train = Z_train[:, :, np.newaxis]
@@ -1267,6 +1274,128 @@ def trainFormModel():
     pass
 
 
+def preparePredictionData(filepath):
+    np.set_string_function(
+        lambda x: repr(x).replace('(', '').replace(')', '').replace('array', '').replace("       ", ' '), repr=False)
+    np.set_printoptions(threshold=inf)
+
+    print("Preparing MLS")
+    mls = dus.util_main_helper(feature="mls", filepath=filepath, predict=True)
+    print("Preparing SSLM-MFCC-COS")
+    sslm_mfcc_cos = dus.util_main_helper(feature="mfcc", filepath=filepath, mode="cos", predict=True)
+    print("Preparing SSLM-MFCC-EUC")
+    sslm_mfcc_euc = dus.util_main_helper(feature="mfcc", filepath=filepath, mode="euc", predict=True)
+    print("Preparing SSLM-CRM-COS")
+    sslm_crm_cos = dus.util_main_helper(feature="chroma", filepath=filepath, mode="cos", predict=True)
+    print("Preparing SSLM-CRM-EUC")
+    sslm_crm_euc = dus.util_main_helper(feature="chroma", filepath=filepath, mode="euc", predict=True)
+
+    midimages = [mls, sslm_mfcc_cos, sslm_mfcc_euc, sslm_crm_cos, sslm_crm_euc]
+    cur_data = []
+    for image in midimages:
+        if image.ndim == 1:
+            raise ValueError("Erroneous Image Shape:", image.shape, image.ndim)
+        else:
+            image1 = np.mean(image, axis=0)
+            image2 = np.var(image, axis=0)
+            image = np.array([image1, image2])
+            cur_data.append(image)
+
+    print("Preparing audio feature data")
+    dfmid = dus.get_midi_dataframe(building_df=True)
+    dfmid = dus.get_audio_features(dfmid, 0, filepath, building_df=True)
+    dfmid = dfmid.fillna(0)
+    dfmid = np.array(dfmid)
+
+    sngdur = 0
+    with audioread.audio_open(filepath) as f:
+        sngdur += f.duration
+
+    print("Building feature table")
+    df = get_column_dataframe()
+    c_flname = os.path.basename(filepath.split('/')[-1].split('.')[0])
+    c_sngdur = sngdur
+    c_slmmls = cur_data[0]
+    c_scmcos = cur_data[1]
+    c_scmeuc = cur_data[2]
+    c_smfcos = cur_data[3]
+    c_smfeuc = cur_data[4]
+    c_midinf = dfmid[0]
+
+    df.loc[0] = ["", "", c_flname, c_sngdur, c_slmmls[0], c_slmmls[1], c_scmcos[0], c_scmcos[1],
+                 c_scmeuc[0], c_scmeuc[1], c_smfcos[0], c_smfcos[1], c_smfeuc[0], c_smfeuc[1],
+                 c_midinf[2], c_midinf[3], c_midinf[4], c_midinf[5], c_midinf[6], c_midinf[7],
+                 c_midinf[8], c_midinf[9], c_midinf[10], c_midinf[11], c_midinf[12], c_midinf[13],
+                 c_midinf[14], c_midinf[15], c_midinf[0], c_midinf[1], c_midinf[16], c_midinf[17],
+                 c_midinf[18], c_midinf[19], c_midinf[20], c_midinf[21], c_midinf[22], c_midinf[23],
+                 c_midinf[24], c_midinf[25], c_midinf[26], c_midinf[27], c_midinf[28], c_midinf[29], ""]
+    return df
+
+
+def predictForm(predict_dir=False):  # TODO
+    midpath = input("Enter path to MIDI file: ")
+    if not os.path.exists(midpath):
+        raise FileNotFoundError("Path not found or does not exist.")
+
+    df = preparePredictionData(midpath)
+    names = df[['piece_name', 'composer', 'filename']]
+    y = df['formtype']
+    df.drop(columns=['spectral_bandwidth_var', 'spectral_centroid_var', 'spectral_flatness_var', 'spectral_rolloff_var',
+                     'zero_crossing_var', 'fourier_tempo_mean', 'fourier_tempo_var'], inplace=True)
+    nonlist = df[['duration', 'spectral_contrast_var']]
+    df.drop(columns=['piece_name', 'composer', 'filename', 'duration', 'spectral_contrast_var', 'formtype'],
+            inplace=True)
+
+    d = [pd.DataFrame(df[col].astype(str).replace(", dtype=float32", "").replace("...,", "0").apply(literal_eval).values.tolist()).add_prefix(col) for col in df.columns]
+    df = pd.concat(d, axis=1).fillna(0)
+    df = pd.concat([pd.concat([names, pd.concat([nonlist, df], axis=1)], axis=1), y], axis=1)  # print(df)
+
+    X_test = df.iloc[:, 3:-1]
+    X_test_names = df.iloc[:, 0:3]
+    y_test = df.iloc[:, -1]
+    print("Test shape:", X_test.shape)
+
+    # Normalize Data
+    min_max_scaler = preprocessing.MinMaxScaler()
+    X_test = min_max_scaler.fit_transform(X_test)
+    print("Normalized Test shape:", X_test.shape)
+
+    # Convert to arrays for keras
+    X_test = np.array(X_test)
+    X_test_names = np.array(X_test_names)
+    y_test = np.array(y_test)
+
+    label_encoder = LabelEncoder()
+    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
+    y_test = to_categorical(label_encoder.fit_transform(y_test))
+    print(y_test.shape)
+    print(label_encoder.classes_, "\n")
+
+    kbest_indicies = np.load(os.path.join(MASTER_DIR, "selectkbest_indicies.npy"))
+    num_indicies = sum(kbest_indicies)
+    X_test = X_test[:, kbest_indicies]
+
+    # Ensembling the model (5 networks) still yields 50% accuracy
+    model = formnn_cnn(num_indicies, filters=8, lrval=0.00003, numclasses=len(label_encoder.classes_))
+    model.summary()
+    model.load_weights('best_form_model_50p.hdf5')
+    result = model.predict(X_test)
+    resultlbl = label_encoder.inverse_transform([np.argmax(result[0, :])])
+    print("Predicted form:", resultlbl)
+
+    """
+    percent_correct = 0
+    pred_table = pd.DataFrame(columns=["Piece", "Predicted", "Actual"])
+    for i in range(len(result)):
+        resultlbl = label_encoder.inverse_transform([np.argmax(result[i, :])])
+        actuallbl = label_encoder.inverse_transform([np.argmax(y_test[i, :])])
+        pred_table.loc[i] = ([X_test_names[i][2], resultlbl, actuallbl])
+        percent_correct += 1 if resultlbl == actuallbl else 0
+    print(pred_table.to_string(index=False))
+    print("Accuracy: " + str(float(percent_correct / len(result)) * 100) + "%")
+    """
+
+
 # region LabelModel
 def formnn_lstm(n_timesteps, mode='concat'):  # Try 'ave', 'mul', and 'sum' also
     model = Sequential()
@@ -1352,7 +1481,6 @@ def prepare_lstm_peaks():
 
 
 if __name__ == '__main__':
-    # TODO: don't forget to normalize data after creating csv
     print("Hello world!")
     # validate_directories()
     # get_total_duration()
@@ -1361,7 +1489,18 @@ if __name__ == '__main__':
     # prepare_train_data()
     # buildValidationSet()
     trainFormModel()
+    # predictForm()
     # prepare_lstm_peaks()
     # trainLabelModel()
     # create_form_dataset()
     print("\nDone!")
+
+    # Measure confidence level? Prediction Interval (PI)
+    # https://medium.com/hal24k-techblog/how-to-generate-neural-network-confidence-intervals-with-keras-e4c0b78ebbdf
+    # https://github.com/philipperemy/keract#display-the-activations-as-a-heatmap-overlaid-on-an-image
+    # Check out humdrum dataset https://www.humdrum.org/
+    # Josh Albrecht? https://www.kent.edu/music/joshua-albrecht
+    # Publish in Society for Music Theorists? SMT - Due mid-Feb., conference in Nov.
+    # https://towardsdatascience.com/10-minutes-to-building-a-cnn-binary-image-classifier-in-tensorflow-4e216b2034aa
+    # Use novelty function for each song, save array of predicted peaks using np.save and load
+    # Include duration as a feature!!!

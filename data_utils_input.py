@@ -31,9 +31,9 @@ def compute_ssm(X, metric="cosine"):
     return 1 - D
 
 
-def mel_spectrogram(sr_desired, name_song, window_size, hop_length):
+def mel_spectrogram(sr_desired, filepath, window_size, hop_length):
     """This function calculates the mel spectrogram in dB with Librosa library"""
-    y, sr = librosa.load(name_song, sr=None)
+    y, sr = librosa.load(filepath, sr=None)
     if sr != sr_desired:
         y = librosa.core.resample(y, sr, sr_desired)
         sr = sr_desired
@@ -184,7 +184,63 @@ TRAIN_DIR = 'F:/Master Thesis Input/NewTrain/'
 MIDI_DIR = os.path.join(MASTER_DIR, 'Data/MIDIs/')
 
 
-def util_main(feature, mode="cos"):
+def util_main_helper(feature, filepath, mode="cos", predict=False, savename=""):
+    sslm_near = None
+    if feature == "mfcc":
+        mel = mel_spectrogram(sr_desired, filepath, window_size, hop_length)
+        if mode == "cos":
+            sslm_near = sslm_gen(mel, p, L_near, mode=mode, feature="mfcc")[0]
+            # mls = max_pooling(mel, p2)
+            # Save mels matrices and sslms as numpy arrays in separate paths
+            # np.save(im_path_mel_near + song_id, mls)
+        elif mode == "euc":
+            sslm_near = sslm_gen(mel, p, L_near, mode=mode, feature="mfcc")[0]
+            if sslm_near.shape[1] < max_pooling(mel, 6).shape[1]:
+                sslm_near = np.hstack((np.ones((301, 1)), sslm_near))
+            elif sslm_near.shape[1] > max_pooling(mel, 6).shape[1]:
+                sslm_near = sslm_near[:, 1:]
+    elif feature == "chroma":
+        stft = fourier_transform(sr_desired, filepath, window_size, hop_length)
+        sslm_near = sslm_gen(stft, p, L_near, mode=mode, feature="chroma")[0]
+        if mode == "euc":
+            if sslm_near.shape[1] < max_pooling(stft, 6).shape[1]:
+                sslm_near = np.hstack((np.ones((301, 1)), sslm_near))
+            elif sslm_near.shape[1] > max_pooling(stft, 6).shape[1]:
+                sslm_near = sslm_near[:, 1:]
+    elif feature == "mls":
+        mel = mel_spectrogram(sr_desired, filepath, window_size, hop_length)
+        sslm_near = ssm_gen(mel, pooling_factor=6)
+
+    """
+    # UNCOMMENT TO DISPLAY FEATURE GRAPHS
+    # recurrence = librosa.segment.recurrence_matrix(sslm_near, mode='affinity', k=sslm_near.shape[1])
+    plt.figure(figsize=(15, 10))
+    if feature == "mls":
+        plt.title("Mel Log-scaled Spectrogram - Self-Similarity matrix (MLS SSM)")
+        plt.imshow(sslm_near, origin='lower', cmap='plasma', aspect=0.8)  # switch to recurrence if desired
+    else:
+        plt_title = "Self-Similarity Lag Matrix (SSLM): "
+        if feature == "chroma":
+            plt_title += "Chromas, "
+        else:
+            plt_title += "MFCCs, "
+        if mode == "cos":
+            plt_title += "Cosine Distance"
+        else:
+            plt_title += "Euclidian Distance"
+        plt.title(plt_title)
+        plt.imshow(sslm_near.astype(np.float32), origin='lower', cmap='viridis', aspect=0.8)  
+        # switch to recurrence if desired
+    plt.show()
+    """
+    if not predict:
+        # Save matrices and sslms as numpy arrays in separate paths
+        np.save(img_path + song_id, sslm_near)
+    else:
+        return sslm_near
+
+
+def util_main(feature, mode="cos", predict=False):
     img_path = ""
 
     if feature == "mfcc":
@@ -214,60 +270,7 @@ def util_main(feature, mode="cos"):
             song_id = name_song[:-4]  # delete .ext characters from the string
             print("\tPreparing", song_id, "for processing...")
             if str(song_id) + ".npy" not in os.listdir(img_path):
-                sslm_near = None
-
-                if feature == "mfcc":
-                    mel = mel_spectrogram(sr_desired, folder + '/' + name_song, window_size, hop_length)
-                    if mode == "cos":
-                        sslm_near = sslm_gen(mel, p, L_near, mode=mode, feature="mfcc")[0]
-                        # mls = max_pooling(mel, p2)
-                        # Save mels matrices and sslms as numpy arrays in separate paths
-                        # np.save(im_path_mel_near + song_id, mls)
-                    elif mode == "euc":
-                        sslm_near = sslm_gen(mel, p, L_near, mode=mode, feature="mfcc")[0]
-
-                        if sslm_near.shape[1] < max_pooling(mel, 6).shape[1]:
-                            sslm_near = np.hstack((np.ones((301, 1)), sslm_near))
-                        elif sslm_near.shape[1] > max_pooling(mel, 6).shape[1]:
-                            sslm_near = sslm_near[:, 1:]
-                elif feature == "chroma":
-                    stft = fourier_transform(sr_desired, folder + '/' + name_song, window_size, hop_length)
-                    sslm_near = sslm_gen(stft, p, L_near, mode=mode, feature="chroma")[0]
-
-                    if mode == "euc":
-                        if sslm_near.shape[1] < max_pooling(stft, 6).shape[1]:
-                            sslm_near = np.hstack((np.ones((301, 1)), sslm_near))
-                        elif sslm_near.shape[1] > max_pooling(stft, 6).shape[1]:
-                            sslm_near = sslm_near[:, 1:]
-                elif feature == "mls":
-                    mel = mel_spectrogram(sr_desired, folder + '/' + name_song, window_size, hop_length)
-                    sslm_near = ssm_gen(mel, pooling_factor=6)
-
-                """
-                # UNCOMMENT TO DISPLAY FEATURE GRAPHS
-                # recurrence = librosa.segment.recurrence_matrix(sslm_near, mode='affinity', k=sslm_near.shape[1])
-                plt.figure(figsize=(15, 10))
-                if feature == "mls":
-                    plt.title("Mel Log-scaled Spectrogram - Self-Similarity matrix (MLS SSM)")
-                    plt.imshow(sslm_near, origin='lower', cmap='plasma', aspect=0.8)  # switch to recurrence if desired
-                else:
-                    plt_title = "Self-Similarity Lag Matrix (SSLM): "
-                    if feature == "chroma":
-                        plt_title += "Chromas, "
-                    else:
-                        plt_title += "MFCCs, "
-                    if mode == "cos":
-                        plt_title += "Cosine Distance"
-                    else:
-                        plt_title += "Euclidian Distance"
-                    plt.title(plt_title)
-                    plt.imshow(sslm_near.astype(np.float32), origin='lower', cmap='viridis', aspect=0.8)  
-                    # switch to recurrence if desired
-                plt.show()
-                """
-                # Save matrices and sslms as numpy arrays in separate paths
-                np.save(img_path + song_id, sslm_near)
-
+                util_main_helper(feature, folder + '/' + name_song, mode, predict, savename=img_path + song_id)
                 print("\t\tFinished", i, "/", num_songs, "- Duration: {:.2f}s".format(time.time() - start_time_song))
             else:
                 print("\t\tAlready completed. Skipping...\n\t\tFinished", i, "/", num_songs)
@@ -454,34 +457,6 @@ class BuildDataloader(k.utils.Sequence):
                     if end != -1:
                         if cnt == end + 1:
                             break
-            """ 
-            for (lab_dirpath, lab_dirnames, lab_filenames) in os.walk(self.labels_path):  # labels files fo labels path
-                for f in im_filenames:  # loop in each images png name files (songs_IDs)
-                    if f[:-4] in lab_dirnames:  # if image name is annotated:
-                        # images path
-                        if f.endswith('.npy'):
-                            img_path = im_dirpath + f
-                            image = np.load(img_path)  # plt.imread if we want to open image
-                            self.images_list.append(image)
-                            print("appended image")
-                        # ""
-                        # labels path
-                        path = os.path.join(lab_dirpath, f[:-4] + "/parsed/")
-                        txt1 = "textfile1_functions.txt"
-                        txt2 = "textfile2_functions.txt"
-                        if os.path.isfile(path + txt1):
-                            txt = "textfile1_functions.txt"
-                        elif os.path.isfile(path + txt2):
-                            txt = "textfile2_functions.txt"
-                        # label_path = path + txt
-                        # label = np.asarray(ReadDataFromtxt(path, txt), dtype=np.float32)
-                        # labels_sec = np.asarray(ReadDataFromtxt(path, txt), dtype=np.float32)
-                        # ""
-
-                        lbls_seconds, lbls_phrases = du.ReadLabelSecondsPhrasesFromFolder()
-                        self.labels_list.append(lbls_phrases)
-                        self.labels_sec_list.append(lbls_seconds)
-            """
         lbls_seconds, lbls_phrases, lbl_forms = du.ReadLabelSecondsPhrasesFromFolder(lblpath=self.labels_path, stop=cnt)
         self.labels_list = lbls_phrases
         self.labels_sec_list = lbls_seconds
@@ -540,7 +515,77 @@ class BuildDataloader(k.utils.Sequence):
         return self.labels_sec_list[index][-1]
 
 
-# TODO: Save all transformed data into one large npy file [mls, {sslm1, 2, 3, 4}, midi], [labelphrase, sec, form, name]
+def get_midi_dataframe(building_df=False):
+    df = pd.DataFrame(columns=['spectral_contrast_mean', 'spectral_contrast_var'])
+    if building_df:
+        df2 = pd.DataFrame(columns=['chroma_stft_mean', 'chroma_stft_var',
+                                    'chroma_cqt_mean', 'chroma_cqt_var',
+                                    'chroma_cens_mean', 'chroma_cens_var',
+                                    'mel_mean', 'mel_var',
+                                    'mfcc_mean', 'mfcc_var',
+                                    'spectral_bandwidth_mean', 'spectral_bandwidth_var',
+                                    'spectral_centroid_mean', 'spectral_centroid_var',
+                                    'spectral_flatness_mean', 'spectral_flatness_var',
+                                    'spectral_rolloff_mean', 'spectral_rolloff_var',
+                                    'poly_features_mean', 'poly_features_var',
+                                    'tonnetz_mean', 'tonnetz_var',
+                                    'zero_crossing_mean', 'zero_crossing_var',
+                                    'tempogram_mean', 'tempogram_var',
+                                    'fourier_tempo_mean', 'fourier_tempo_var'])
+        df = pd.concat([df, df2], axis=1)
+    return df
+
+
+def get_audio_features(df, cnt, mid_path, building_df=False):
+    X, sample_rate = librosa.load(mid_path, res_type='kaiser_fast', duration=3, sr=44100, offset=0.5)
+    contrast = librosa.feature.spectral_contrast(y=X, sr=sample_rate)
+    """ Plot spectral contrast
+    plt.figure(figsize=(10, 4))
+    librosa.display.specshow(contrast, cmap='plasma', x_axis='time')
+    plt.colorbar()
+    plt.ylabel('Frequency bands')
+    plt.title('Spectral contrast')
+    plt.tight_layout()
+    plt.show()
+    """
+    contrast = np.mean(contrast, axis=0)
+    contrast2 = np.var(contrast, axis=0)
+    if building_df:
+        chroma_cens = librosa.feature.chroma_cens(y=X, sr=sample_rate)
+        chroma_cqt = librosa.feature.chroma_cqt(y=X, sr=sample_rate)
+        chroma_stft = librosa.feature.chroma_stft(y=X, sr=sample_rate)
+        mel_spec = librosa.feature.melspectrogram(y=X, sr=sample_rate)
+        mfcc_spec = librosa.feature.mfcc(y=X, sr=sample_rate)
+        spec_bdwth = librosa.feature.spectral_bandwidth(y=X, sr=sample_rate)
+        spec_centrd = librosa.feature.spectral_centroid(y=X, sr=sample_rate)
+        spec_flatns = librosa.feature.spectral_flatness(y=X)
+        spec_rolloff = librosa.feature.spectral_rolloff(y=X, sr=sample_rate)
+        poly_feat = librosa.feature.poly_features(y=X, sr=sample_rate)
+        tonnetz = librosa.feature.tonnetz(y=X, sr=sample_rate)
+        zero_cross = librosa.feature.zero_crossing_rate(y=X)
+        tempogram = librosa.feature.tempogram(y=X, sr=sample_rate)
+        fouriertemp = librosa.feature.fourier_tempogram(y=X, sr=sample_rate)
+
+        df.loc[cnt] = [contrast, contrast2,  # 0, 1
+                       np.mean(chroma_cens, axis=0), np.var(chroma_cens, axis=0),  # 2, 3
+                       np.mean(chroma_cqt, axis=0), np.var(chroma_cqt, axis=0),  # 4, 5
+                       np.mean(chroma_stft, axis=0), np.var(chroma_stft, axis=0),  # 6, 7
+                       np.mean(mel_spec, axis=0), np.var(mel_spec, axis=0),  # 8, 9
+                       np.mean(mfcc_spec, axis=0), np.var(mfcc_spec, axis=0),  # 10, 11
+                       np.mean(spec_bdwth, axis=0), np.var(spec_bdwth, axis=0),  # 12, 13
+                       np.mean(spec_centrd, axis=0), np.var(spec_centrd, axis=0),  # 14, 15
+                       np.mean(spec_flatns, axis=0), np.var(spec_flatns, axis=0),  # 16, 17
+                       np.mean(spec_rolloff, axis=0), np.var(spec_rolloff, axis=0),  # 18, 19
+                       np.mean(poly_feat, axis=0), np.var(poly_feat, axis=0),  # 20, 21
+                       np.mean(tonnetz, axis=0), np.var(tonnetz, axis=0),  # 22, 23
+                       np.mean(zero_cross, axis=0), np.var(zero_cross, axis=0),  # 24, 25
+                       np.mean(tempogram, axis=0), np.var(tempogram, axis=0),  # 26, 27
+                       np.mean(fouriertemp, axis=0), np.var(fouriertemp, axis=0)]  # 28, 29
+    else:
+        df.loc[cnt] = [contrast, contrast2]
+    return df
+
+
 # Load MIDI Data
 class BuildMIDIloader(k.utils.Sequence):
     def __init__(self, midi_path, label_path=DEFAULT_LABELPATH,
@@ -557,24 +602,7 @@ class BuildMIDIloader(k.utils.Sequence):
         self.reshape = reshape
 
         print("Building dataloader for " + self.midi_path)
-        df = pd.DataFrame(columns=['spectral_contrast_mean', 'spectral_contrast_var'])
-        if building_df:
-            df2 = pd.DataFrame(columns=['chroma_stft_mean', 'chroma_stft_var',
-                                        'chroma_cqt_mean', 'chroma_cqt_var',
-                                        'chroma_cens_mean', 'chroma_cens_var',
-                                        'mel_mean', 'mel_var',
-                                        'mfcc_mean', 'mfcc_var',
-                                        'spectral_bandwidth_mean', 'spectral_bandwidth_var',
-                                        'spectral_centroid_mean', 'spectral_centroid_var',
-                                        'spectral_flatness_mean', 'spectral_flatness_var',
-                                        'spectral_rolloff_mean', 'spectral_rolloff_var',
-                                        'poly_features_mean', 'poly_features_var',
-                                        'tonnetz_mean', 'tonnetz_var',
-                                        'zero_crossing_mean', 'zero_crossing_var',
-                                        'tempogram_mean', 'tempogram_var',
-                                        'fourier_tempo_mean', 'fourier_tempo_var'])
-            df = pd.concat([df, df2], axis=1)
-            pass
+        df = get_midi_dataframe(building_df)
         cnt = 1
         for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(self.midi_path):
             for f in mid_filenames:
@@ -583,52 +611,7 @@ class BuildMIDIloader(k.utils.Sequence):
                     print("Reading file #" + str(cnt))
                     mid_path = mid_dirpath + f
                     # print("Working on file: " + f)
-                    X, sample_rate = librosa.load(mid_path, res_type='kaiser_fast', duration=3, sr=44100, offset=0.5)
-                    contrast = librosa.feature.spectral_contrast(y=X, sr=sample_rate)
-                    """ Plot spectral contrast
-                    plt.figure(figsize=(10, 4))
-                    librosa.display.specshow(contrast, cmap='plasma', x_axis='time')
-                    plt.colorbar()
-                    plt.ylabel('Frequency bands')
-                    plt.title('Spectral contrast')
-                    plt.tight_layout()
-                    plt.show()
-                    """
-                    contrast = np.mean(contrast, axis=0)
-                    contrast2 = np.var(contrast, axis=0)
-                    if building_df:
-                        chroma_cens = librosa.feature.chroma_cens(y=X, sr=sample_rate)
-                        chroma_cqt = librosa.feature.chroma_cqt(y=X, sr=sample_rate)
-                        chroma_stft = librosa.feature.chroma_stft(y=X, sr=sample_rate)
-                        mel_spec = librosa.feature.melspectrogram(y=X, sr=sample_rate)
-                        mfcc_spec = librosa.feature.mfcc(y=X, sr=sample_rate)
-                        spec_bdwth = librosa.feature.spectral_bandwidth(y=X, sr=sample_rate)
-                        spec_centrd = librosa.feature.spectral_centroid(y=X, sr=sample_rate)
-                        spec_flatns = librosa.feature.spectral_flatness(y=X)
-                        spec_rolloff = librosa.feature.spectral_rolloff(y=X, sr=sample_rate)
-                        poly_feat = librosa.feature.poly_features(y=X, sr=sample_rate)
-                        tonnetz = librosa.feature.tonnetz(y=X, sr=sample_rate)
-                        zero_cross = librosa.feature.zero_crossing_rate(y=X)
-                        tempogram = librosa.feature.tempogram(y=X, sr=sample_rate)
-                        fouriertemp = librosa.feature.fourier_tempogram(y=X, sr=sample_rate)
-
-                        df.loc[cnt-1] = [contrast, contrast2,  # 0, 1
-                                         np.mean(chroma_cens, axis=0), np.var(chroma_cens, axis=0),  # 2, 3
-                                         np.mean(chroma_cqt, axis=0), np.var(chroma_cqt, axis=0),  # 4, 5
-                                         np.mean(chroma_stft, axis=0), np.var(chroma_stft, axis=0),  # 6, 7
-                                         np.mean(mel_spec, axis=0), np.var(mel_spec, axis=0),  # 8, 9
-                                         np.mean(mfcc_spec, axis=0), np.var(mfcc_spec, axis=0),  # 10, 11
-                                         np.mean(spec_bdwth, axis=0), np.var(spec_bdwth, axis=0),  # 12, 13
-                                         np.mean(spec_centrd, axis=0), np.var(spec_centrd, axis=0),  # 14, 15
-                                         np.mean(spec_flatns, axis=0), np.var(spec_flatns, axis=0),  # 16, 17
-                                         np.mean(spec_rolloff, axis=0), np.var(spec_rolloff, axis=0),  # 18, 19
-                                         np.mean(poly_feat, axis=0), np.var(poly_feat, axis=0),  # 20, 21
-                                         np.mean(tonnetz, axis=0), np.var(tonnetz, axis=0),  # 22, 23
-                                         np.mean(zero_cross, axis=0), np.var(zero_cross, axis=0),  # 24, 25
-                                         np.mean(tempogram, axis=0), np.var(tempogram, axis=0),  # 26, 27
-                                         np.mean(fouriertemp, axis=0), np.var(fouriertemp, axis=0)]  # 28, 29
-                    else:
-                        df.loc[cnt-1] = [contrast, contrast2]
+                    df = get_midi_dataframe(df, cnt-1, mid_path, building_df)
                     cnt += 1
                     if end != -1:
                         if cnt == end:
