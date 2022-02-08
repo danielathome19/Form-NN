@@ -1015,6 +1015,7 @@ def formnn_cnn_old(input_dim_1, filters=64, lrval=0.0001, numclasses=12):
 # endregion
 
 
+# region FormModel
 def formnn_cnn(input_dim_1, filters=8, lrval=0.0001, numclasses=12):
     np.random.seed(9)
     X_input = Input(shape=(input_dim_1, 1))
@@ -1453,6 +1454,7 @@ def predictForm():
     print(pred_table.to_string(index=False))
     print("Accuracy: " + str(float(percent_correct / len(result)) * 100) + "%")
     """
+#endregion
 
 
 # region LabelModel
