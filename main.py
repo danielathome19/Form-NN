@@ -1355,6 +1355,11 @@ def predictForm():
             # df2 = pd.read_excel(os.path.join(MASTER_DIR, 'brahms_opus117_1.xlsx'))
             df2 = preparePredictionData(midpath, savetoexcel=False)
         elif os.path.isdir(midpath):
+            if midpath[-1] != "\\" or midpath[-1] != "/":
+                if "\\" in midpath:
+                    midpath = midpath + "\\"
+                else:
+                    midpath = midpath + "/"
             cnt = 0
             audio_extenions = ["3gp", "aa", "aac", "aax", "act", "aiff", "alac", "amr", "ape", "au", "awb", "dct",
                                "dss", "dvf", "flac", "gsm", "iklax", "ivs", "m4a", "m4b", "m4p", "mmf", "mp3", "mpc",
@@ -1365,7 +1370,8 @@ def predictForm():
                     if f.endswith(tuple(audio_extenions)):
                         print("Reading file #" + str(cnt + 1))
                         mid_path = mid_dirpath + f
-                        df2.append(preparePredictionData(mid_path, savetoexcel=False)).reset_index()
+                        df2t = preparePredictionData(mid_path, savetoexcel=False)
+                        df2 = pd.concat([df2, df2t], ignore_index=True).reset_index(drop=True)
                         cnt += 1
         else:
             raise FileNotFoundError("Path resulted in error.")
@@ -1430,19 +1436,12 @@ def predictForm():
     model.summary()
     model.load_weights('best_form_model_50p.hdf5')
 
-    print("Performing predictions on", X_test_names[-1])
-    # print(X_test)
     result = model.predict(X_test)
-    # print(result)
-    resultlbl = label_encoder.inverse_transform([np.argmax(result[-1, :])])
-    print("\t\tPredicted form:", resultlbl)
-    # """
-    result = model.predict(X_test)
+    print(X_test.shape[0] - train_rows)
     for i in range(X_test.shape[0] - train_rows):
         print("Performing predictions on", X_test_names[i + train_rows])
         resultlbl = label_encoder.inverse_transform([np.argmax(result[i + train_rows, :])])
         print("\t\tPredicted form:", resultlbl)
-    # """
     """
     percent_correct = 0
     pred_table = pd.DataFrame(columns=["Piece", "Predicted", "Actual"])
