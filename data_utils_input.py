@@ -235,7 +235,7 @@ def util_main_helper(feature, filepath, mode="cos", predict=False, savename=""):
     """
     if not predict:
         # Save matrices and sslms as numpy arrays in separate paths
-        np.save(img_path + song_id, sslm_near)
+        np.save(filepath, sslm_near)
     else:
         return sslm_near
 

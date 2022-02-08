@@ -674,6 +674,23 @@ def create_form_dataset():
     df.to_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'), index=False)
 
 
+def prepare_lstm_peaks():
+    MIDI_FILES = os.path.join(MASTER_INPUT_DIR, 'Full/MIDI/')
+    PEAK_DIR = os.path.join(MASTER_INPUT_DIR, 'Full/PEAKS/')
+    cnt = len(os.listdir(PEAK_DIR)) + 1
+    for file in os.listdir(MIDI_FILES):
+        foldername = MIDI_FILES.split('\\')[-1]
+        filename, name = file, file.split('/')[-1].split('.')[0]
+        if str(os.path.basename(name)) + ".npy" in os.listdir(PEAK_DIR):
+            continue
+        print(f"\nWorking on {os.path.basename(name)}, file #" + str(cnt))
+        fullfilename = MIDI_FILES + '/' + filename
+        peaks = du.peak_picking(fullfilename, name, foldername, returnpeaks=True)
+        print(peaks)
+        np.save(os.path.join(PEAK_DIR, os.path.basename(name)), peaks)
+        cnt += 1
+
+
 """===================================================================================="""
 
 
@@ -1454,7 +1471,7 @@ def predictForm():
     print(pred_table.to_string(index=False))
     print("Accuracy: " + str(float(percent_correct / len(result)) * 100) + "%")
     """
-#endregion
+# endregion
 
 
 # region LabelModel
@@ -1483,29 +1500,46 @@ def get_sequence(n_timesteps):
     return X, y
 
 
-def train_model(model, n_timesteps):
-    loss = list()
+def trainLabelModel_helper(model, n_timesteps, num_epochs=250):
     # early_stopping = EarlyStopping(patience=5, verbose=5, mode="auto")  # Does not work without validation set
     # checkpoint = ModelCheckpoint(os.path.join(MASTER_DIR, 'best_formNN_label_model.hdf5'), monitor='val_accuracy',
-    #                             verbose=0, save_best_only=True, mode='max', save_freq='epoch', save_weights_only=True)
-    for _ in range(250):
-        # generate new random sequence
-        X, y = get_sequence(n_timesteps)
-        # fit model for one epoch on this sequence
-        hist = model.fit(X, y, epochs=1, batch_size=1, verbose=1)  # , callbacks=[checkpoint])
-        loss.append(hist.history['loss'][0])
-    return loss
+    #                            verbose=0, save_best_only=False, mode='max', save_freq='epoch', save_weights_only=True)
+    history_loss = []
+    # history_val_loss = []
+    history_accuracy = []
+    # history_val_accuracy = []
+    for i in range(num_epochs):
+        X, y = get_sequence(n_timesteps)  # generate new random sequence
+        model_history = model.fit(X, y, epochs=1, batch_size=1, verbose=1)  # , callbacks=[checkpoint])
+        history_loss.append(model_history.history['loss'])
+        # history_val_loss.append(model_history.history['val_loss'])
+        history_accuracy.append(model_history.history['accuracy'])
+        # history_val_accuracy.append(model_history.history['val_accuracy'])
+        print("Epochs completed:", i)
+    # return [history_loss, history_val_loss, history_accuracy, history_val_accuracy]
+    return [history_loss, history_accuracy]
 
 
 def trainLabelModel():
     n_timesteps = 10
     model = formnn_lstm(n_timesteps, mode='concat')
-    model_history = train_model(model, n_timesteps)
-    plt.plot(model_history)
+    model_history = trainLabelModel_helper(model, n_timesteps, num_epochs=250)
+    plt.plot(model_history[0])  # plt.plot(model_history.history['loss'])
+    # plt.plot(model_history[1])  # plt.plot(model_history.history['val_loss'])
     plt.title('Model Loss')
     plt.ylabel('Loss')
     plt.xlabel('Epoch')
-    plt.savefig('Initial_Label_Model_Loss.png')
+    plt.legend(['train', 'test'], loc='upper left')
+    plt.savefig('Initial_LabelModel_Loss.png')
+    plt.show()
+
+    plt.plot(model_history[1])  # plt.plot(model_history.history['accuracy'])
+    # plt.plot(model_history[3])  # plt.plot(model_history.history['val_accuracy'])
+    plt.title('Model Accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Test'], loc='upper left')
+    plt.savefig('Initial_LabelModel_Accuracy.png')
     plt.show()
 
     print("Evaluating...")
@@ -1521,23 +1555,6 @@ def trainLabelModel():
     for i in range(n_timesteps):
         print('Expected:', y[0, i], 'Predicted', yhat[0, i])
     pass
-
-
-def prepare_lstm_peaks():
-    MIDI_FILES = os.path.join(MASTER_INPUT_DIR, 'Full/MIDI/')
-    PEAK_DIR = os.path.join(MASTER_INPUT_DIR, 'Full/PEAKS/')
-    cnt = len(os.listdir(PEAK_DIR)) + 1
-    for file in os.listdir(MIDI_FILES):
-        foldername = MIDI_FILES.split('\\')[-1]
-        filename, name = file, file.split('/')[-1].split('.')[0]
-        if str(os.path.basename(name)) + ".npy" in os.listdir(PEAK_DIR):
-            continue
-        print(f"\nWorking on {os.path.basename(name)}, file #" + str(cnt))
-        fullfilename = MIDI_FILES + '/' + filename
-        peaks = du.peak_picking(fullfilename, name, foldername, returnpeaks=True)
-        print(peaks)
-        np.save(os.path.join(PEAK_DIR, os.path.basename(name)), peaks)
-        cnt += 1
 # endregion
 
 
@@ -1550,9 +1567,9 @@ if __name__ == '__main__':
     # prepare_train_data()
     # buildValidationSet()
     # trainFormModel()
-    predictForm()
+    # predictForm()
     # prepare_lstm_peaks()
-    # trainLabelModel()
+    trainLabelModel()
     # create_form_dataset()
     print("\nDone!")
 
