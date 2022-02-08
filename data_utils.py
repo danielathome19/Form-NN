@@ -770,7 +770,6 @@ def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1):
     # inverted = label_encoder.inverse_transform([argmax(onehot_encoded[0, :])])  # Return original label from encoding
     # np.save(os.path.join(MASTER_DIR, 'form_classes.npy'), label_encoder.classes_)
     # print(label_encoder.classes_)
-
     """
     # Convert Phrases to One Hot encoding
     values = np.array([np.array([np.array(y) for y in x]) for x in lbls])  # print(values)

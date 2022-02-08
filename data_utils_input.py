@@ -564,7 +564,7 @@ def get_audio_features(df, cnt, mid_path, building_df=False):
         tonnetz = librosa.feature.tonnetz(y=X, sr=sample_rate)
         zero_cross = librosa.feature.zero_crossing_rate(y=X)
         tempogram = librosa.feature.tempogram(y=X, sr=sample_rate)
-        fouriertemp = librosa.feature.fourier_tempogram(y=X, sr=sample_rate)
+        fouriertemp = librosa.feature.fourier_tempogram(y=X, sr=sample_rate)  # Not used in model, repurpose for others?
 
         df.loc[cnt] = [contrast, contrast2,  # 0, 1
                        np.mean(chroma_cens, axis=0), np.var(chroma_cens, axis=0),  # 2, 3

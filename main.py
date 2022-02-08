@@ -35,6 +35,7 @@ from tensorflow.keras.regularizers import l2
 import seaborn as sns
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.utils import to_categorical
+from sklearn.preprocessing import OneHotEncoder
 from sklearn.metrics import classification_report, roc_curve, roc_auc_score, auc
 import tensorflow as tf
 from tensorflow import keras
@@ -665,6 +666,10 @@ def create_form_dataset():
                         c_midinf[14], c_midinf[15], c_midinf[0], c_midinf[1], c_midinf[16], c_midinf[17],
                         c_midinf[18], c_midinf[19], c_midinf[20], c_midinf[21], c_midinf[22], c_midinf[23],
                         c_midinf[24], c_midinf[25], c_midinf[26], c_midinf[27], c_midinf[28], c_midinf[29], c_flabel]
+    for col in df.columns:
+        df[col] = df[col].apply(lambda x: str(x)
+                                .replace(", dtype=float32", "").replace("],", "]")
+                                .replace("dtype=float32", "").replace("...,", ""))
     # df.to_csv(os.path.join(MASTER_DIR, 'full_dataset.csv'), index=False)  # Improperly saves lists because of , delim
     df.to_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'), index=False)
 
@@ -1274,11 +1279,7 @@ def trainFormModel():
     pass
 
 
-def preparePredictionData(filepath):
-    np.set_string_function(
-        lambda x: repr(x).replace('(', '').replace(')', '').replace('array', '').replace("       ", ' '), repr=False)
-    np.set_printoptions(threshold=inf)
-
+def preparePredictionData(filepath, savetoexcel=False):
     print("Preparing MLS")
     mls = dus.util_main_helper(feature="mls", filepath=filepath, predict=True)
     print("Preparing SSLM-MFCC-COS")
@@ -1311,6 +1312,10 @@ def preparePredictionData(filepath):
     with audioread.audio_open(filepath) as f:
         sngdur += f.duration
 
+    np.set_string_function(
+        lambda x: repr(x).replace('(', '').replace(')', '').replace('array', '').replace("       ", ' '), repr=False)
+    np.set_printoptions(threshold=inf)
+
     print("Building feature table")
     df = get_column_dataframe()
     c_flname = os.path.basename(filepath.split('/')[-1].split('.')[0])
@@ -1322,22 +1327,70 @@ def preparePredictionData(filepath):
     c_smfeuc = cur_data[4]
     c_midinf = dfmid[0]
 
-    df.loc[0] = ["", "", c_flname, c_sngdur, c_slmmls[0], c_slmmls[1], c_scmcos[0], c_scmcos[1],
+    df.loc[0] = ["TBD", "TBD", c_flname, c_sngdur, c_slmmls[0], c_slmmls[1], c_scmcos[0], c_scmcos[1],
                  c_scmeuc[0], c_scmeuc[1], c_smfcos[0], c_smfcos[1], c_smfeuc[0], c_smfeuc[1],
                  c_midinf[2], c_midinf[3], c_midinf[4], c_midinf[5], c_midinf[6], c_midinf[7],
                  c_midinf[8], c_midinf[9], c_midinf[10], c_midinf[11], c_midinf[12], c_midinf[13],
                  c_midinf[14], c_midinf[15], c_midinf[0], c_midinf[1], c_midinf[16], c_midinf[17],
                  c_midinf[18], c_midinf[19], c_midinf[20], c_midinf[21], c_midinf[22], c_midinf[23],
-                 c_midinf[24], c_midinf[25], c_midinf[26], c_midinf[27], c_midinf[28], c_midinf[29], ""]
+                 c_midinf[24], c_midinf[25], c_midinf[26], c_midinf[27], c_midinf[28], c_midinf[29], "TBD"]
+    for col in df.columns:
+        df[col] = df[col].apply(lambda x: str(x)
+                                .replace(", dtype=float32", "").replace("],", "]")
+                                .replace("dtype=float32", "").replace("...,", ""))
+    if savetoexcel:
+        df.to_excel(os.path.join(MASTER_DIR, c_flname + '.xlsx'), index=False)
     return df
 
 
-def predictForm(predict_dir=False):  # TODO
-    midpath = input("Enter path to MIDI file: ")
+def predictForm():
+    midpath = input("Enter path to folder or audio file: ")
+    df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))  # 15,330
+    df = pd.DataFrame(df.loc[[0, 153]]).reset_index()
+    df2 = pd.DataFrame()
     if not os.path.exists(midpath):
         raise FileNotFoundError("Path not found or does not exist.")
+    else:
+        if os.path.isfile(midpath):
+            # df2 = pd.read_excel(os.path.join(MASTER_DIR, 'brahms_opus117_1.xlsx'))
+            df2 = preparePredictionData(midpath, savetoexcel=False)
+        elif os.path.isdir(midpath):
+            cnt = 0
+            audio_extenions = ["3gp", "aa", "aac", "aax", "act", "aiff", "alac", "amr", "ape", "au", "awb", "dct",
+                               "dss", "dvf", "flac", "gsm", "iklax", "ivs", "m4a", "m4b", "m4p", "mmf", "mp3", "mpc",
+                               "msv", "nmf", "ogg", "oga", "mogg", "opus", "ra", "rm", "raw", "rf64", "sln", "tta",
+                               "voc", "vox", "wav", "wma", "wv", "webm", "8svx", "cda", "mid", "midi", "mp4"]
+            for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(midpath):
+                for f in mid_filenames:
+                    if f.endswith(tuple(audio_extenions)):
+                        print("Reading file #" + str(cnt + 1))
+                        mid_path = mid_dirpath + f
+                        df2.append(preparePredictionData(mid_path, savetoexcel=False)).reset_index()
+                        cnt += 1
+        else:
+            raise FileNotFoundError("Path resulted in error.")
 
-    df = preparePredictionData(midpath)
+    # Reshape test data to match training set
+    np.set_string_function(
+        lambda x: repr(x).replace('(', '').replace(')', '').replace('array', '').replace("       ", ' '), repr=False)
+    np.set_printoptions(threshold=inf)
+    for i in range(df2.shape[0]):
+        for col_name, data in df2.items():
+            if "[" in str(data[i]) and "]" in str(data[i]):
+                compdata = df.iloc[1][col_name]
+                if "[" in compdata and "]" in compdata:
+                    if 'dtype=complex64' in compdata or 'dtype=complex64' in str(data[i]):
+                        continue  # Ignore since complex values aren't used in model
+                    arr_1 = np.array(literal_eval(compdata))
+                    # print("Evaluating:", str(data[i]))
+                    arr_2 = np.array(literal_eval(str(data[i]).strip()))
+                    arr_2 = np.resize(arr_2, arr_1.shape)
+                    df2.at[i, col_name] = arr_2
+    # df = df2
+    df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))  # 15,330
+    train_rows = df.shape[0]
+    df = pd.concat([df, df2], ignore_index=True).reset_index(drop=True)
+
     names = df[['piece_name', 'composer', 'filename']]
     y = df['formtype']
     df.drop(columns=['spectral_bandwidth_var', 'spectral_centroid_var', 'spectral_flatness_var', 'spectral_rolloff_var',
@@ -1345,10 +1398,10 @@ def predictForm(predict_dir=False):  # TODO
     nonlist = df[['duration', 'spectral_contrast_var']]
     df.drop(columns=['piece_name', 'composer', 'filename', 'duration', 'spectral_contrast_var', 'formtype'],
             inplace=True)
-
-    d = [pd.DataFrame(df[col].astype(str).replace(", dtype=float32", "").replace("...,", "0").apply(literal_eval).values.tolist()).add_prefix(col) for col in df.columns]
+    d = [pd.DataFrame(df[col].astype(str).apply(literal_eval).values.tolist()).add_prefix(col) for col in df.columns]
     df = pd.concat(d, axis=1).fillna(0)
     df = pd.concat([pd.concat([names, pd.concat([nonlist, df], axis=1)], axis=1), y], axis=1)  # print(df)
+    df = df.fillna(0)
 
     X_test = df.iloc[:, 3:-1]
     X_test_names = df.iloc[:, 0:3]
@@ -1367,22 +1420,29 @@ def predictForm(predict_dir=False):  # TODO
 
     label_encoder = LabelEncoder()
     label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
-    y_test = to_categorical(label_encoder.fit_transform(y_test))
-    print(y_test.shape)
-    print(label_encoder.classes_, "\n")
 
-    kbest_indicies = np.load(os.path.join(MASTER_DIR, "selectkbest_indicies.npy"))
-    num_indicies = sum(kbest_indicies)
-    X_test = X_test[:, kbest_indicies]
+    skb_values = np.load(os.path.join(MASTER_DIR, "selectkbest_indicies.npy"))
+    kbest_indicies = np.argwhere(skb_values == True)
+    X_test = X_test[:, skb_values]
 
     # Ensembling the model (5 networks) still yields 50% accuracy
-    model = formnn_cnn(num_indicies, filters=8, lrval=0.00003, numclasses=len(label_encoder.classes_))
+    model = formnn_cnn(5000, filters=8, lrval=0.00003, numclasses=12)
     model.summary()
     model.load_weights('best_form_model_50p.hdf5')
-    result = model.predict(X_test)
-    resultlbl = label_encoder.inverse_transform([np.argmax(result[0, :])])
-    print("Predicted form:", resultlbl)
 
+    print("Performing predictions on", X_test_names[-1])
+    # print(X_test)
+    result = model.predict(X_test)
+    # print(result)
+    resultlbl = label_encoder.inverse_transform([np.argmax(result[-1, :])])
+    print("\t\tPredicted form:", resultlbl)
+    # """
+    result = model.predict(X_test)
+    for i in range(X_test.shape[0] - train_rows):
+        print("Performing predictions on", X_test_names[i + train_rows])
+        resultlbl = label_encoder.inverse_transform([np.argmax(result[i + train_rows, :])])
+        print("\t\tPredicted form:", resultlbl)
+    # """
     """
     percent_correct = 0
     pred_table = pd.DataFrame(columns=["Piece", "Predicted", "Actual"])
@@ -1488,8 +1548,8 @@ if __name__ == '__main__':
     # prepare_model_training_input()
     # prepare_train_data()
     # buildValidationSet()
-    trainFormModel()
-    # predictForm()
+    # trainFormModel()
+    predictForm()
     # prepare_lstm_peaks()
     # trainLabelModel()
     # create_form_dataset()
