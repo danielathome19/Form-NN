@@ -125,6 +125,25 @@ VAL_LABELPATH = os.path.join(MASTER_LABELPATH, 'Validate/')
 
 
 # Deprecated
+def validate_directories():
+    print("Validating Training Directory...")
+    dus.validate_folder_contents(TRAIN_LABELPATH, os.path.join(TRAIN_DIR, 'MIDI/'), os.path.join(TRAIN_DIR, 'MLS/'),
+                                 os.path.join(TRAIN_DIR, 'SSLM_CRM_COS/'), os.path.join(TRAIN_DIR, 'SSLM_CRM_EUC/'),
+                                 os.path.join(TRAIN_DIR, 'SSLM_MFCC_COS/'), os.path.join(TRAIN_DIR, 'SSLM_MFCC_EUC/'))
+    print("Succes.\n")
+    print("Validating Validation Directory...")
+    dus.validate_folder_contents(VAL_LABELPATH, os.path.join(VAL_DIR, 'MIDI/'), os.path.join(VAL_DIR, 'MLS/'),
+                                 os.path.join(VAL_DIR, 'SSLM_CRM_COS/'), os.path.join(VAL_DIR, 'SSLM_CRM_EUC/'),
+                                 os.path.join(VAL_DIR, 'SSLM_MFCC_COS/'), os.path.join(VAL_DIR, 'SSLM_MFCC_EUC/'))
+    print("Succes.\n")
+    print("Validating Testing Directory...")
+    dus.validate_folder_contents(TEST_LABELPATH, os.path.join(TEST_DIR, 'MIDI/'), os.path.join(TEST_DIR, 'MLS/'),
+                                 os.path.join(TEST_DIR, 'SSLM_CRM_COS/'), os.path.join(TEST_DIR, 'SSLM_CRM_EUC/'),
+                                 os.path.join(TEST_DIR, 'SSLM_MFCC_COS/'), os.path.join(TEST_DIR, 'SSLM_MFCC_EUC/'))
+    print("Succes.\n")
+
+
+# Deprecated
 def get_class_weights(labels, one_hot=False):
     if one_hot is False:
         n_classes = max(labels) + 1
@@ -539,24 +558,6 @@ def prepare_model_training_input():
     dus.util_main(feature="chroma", mode="euc")
 
 
-def validate_directories():
-    print("Validating Training Directory...")
-    dus.validate_folder_contents(TRAIN_LABELPATH, os.path.join(TRAIN_DIR, 'MIDI/'), os.path.join(TRAIN_DIR, 'MLS/'),
-                                 os.path.join(TRAIN_DIR, 'SSLM_CRM_COS/'), os.path.join(TRAIN_DIR, 'SSLM_CRM_EUC/'),
-                                 os.path.join(TRAIN_DIR, 'SSLM_MFCC_COS/'), os.path.join(TRAIN_DIR, 'SSLM_MFCC_EUC/'))
-    print("Succes.\n")
-    print("Validating Validation Directory...")
-    dus.validate_folder_contents(VAL_LABELPATH, os.path.join(VAL_DIR, 'MIDI/'), os.path.join(VAL_DIR, 'MLS/'),
-                                 os.path.join(VAL_DIR, 'SSLM_CRM_COS/'), os.path.join(VAL_DIR, 'SSLM_CRM_EUC/'),
-                                 os.path.join(VAL_DIR, 'SSLM_MFCC_COS/'), os.path.join(VAL_DIR, 'SSLM_MFCC_EUC/'))
-    print("Succes.\n")
-    print("Validating Testing Directory...")
-    dus.validate_folder_contents(TEST_LABELPATH, os.path.join(TEST_DIR, 'MIDI/'), os.path.join(TEST_DIR, 'MLS/'),
-                                 os.path.join(TEST_DIR, 'SSLM_CRM_COS/'), os.path.join(TEST_DIR, 'SSLM_CRM_EUC/'),
-                                 os.path.join(TEST_DIR, 'SSLM_MFCC_COS/'), os.path.join(TEST_DIR, 'SSLM_MFCC_EUC/'))
-    print("Succes.\n")
-
-
 def multi_input_generator_helper(gen1, gen2, gen3, gen4, concat=True):
     while True:
         sslm1 = next(gen1)[0]
@@ -580,17 +581,21 @@ def multi_input_generator_helper(gen1, gen2, gen3, gen4, concat=True):
                                                            axis=-1)), axis=-1)), axis=-1), axis=-1), sslm1.shape
 
 
-def multi_input_generator(gen1, gen2, gen3, gen4, gen5, gen6, feature=2, concat=True, expand_dim_6=True):
+def multi_input_generator(gen1, gen2, gen3, gen4, gen5, gen6, feature=2, concat=True, expand_dim_6=True, augment=False):
     while True:
         mlsgen = next(gen1)
-        sslmimgs, sslmshape = next(multi_input_generator_helper(gen2, gen3, gen4, gen5, concat))
         mlsimg = mlsgen[0]
-        if not expand_dim_6:
-            yield [mlsimg, sslmimgs, next(gen6)[0]], mlsgen[1][feature]
-            continue
-        if mlsimg.shape != sslmshape:
-            mlsimg = resize(mlsimg, sslmshape)
-        yield [mlsimg, sslmimgs, tf.expand_dims(next(gen6)[0], axis=0)], mlsgen[1][feature]
+        if augment:
+            yield [mlsimg, [[0, 0], [0, 0], [0, 0], [0, 0]],
+                   next(gen6)[0]], mlsgen[1][feature]  # tf.expand_dims(next(gen6)[0], axis=0)], mlsgen[1][feature]
+        else:
+            sslmimgs, sslmshape = next(multi_input_generator_helper(gen2, gen3, gen4, gen5, concat))
+            if not expand_dim_6:
+                yield [mlsimg, sslmimgs, next(gen6)[0]], mlsgen[1][feature]
+                continue
+            if mlsimg.shape != sslmshape:
+                mlsimg = resize(mlsimg, sslmshape)
+            yield [mlsimg, sslmimgs, tf.expand_dims(next(gen6)[0], axis=0)], mlsgen[1][feature]
 
 
 def get_column_dataframe():
@@ -619,24 +624,32 @@ def get_column_dataframe():
     return df
 
 
-def create_form_dataset():
-    mls_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'MLS/'),
-                                   label_path=FULL_LABELPATH, batch_size=1, reshape=False)
-    sslm_cmcos_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_CRM_COS/'),
-                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
-    sslm_cmeuc_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_CRM_EUC/'),
-                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
-    sslm_mfcos_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_MFCC_COS/'),
-                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
-    sslm_mfeuc_full = dus.BuildDataloader(os.path.join(FULL_DIR, 'SSLM_MFCC_EUC/'),
-                                          label_path=FULL_LABELPATH, batch_size=1, reshape=False)
-    midi_full = dus.BuildMIDIloader(os.path.join(FULL_DIR, 'MIDI/'),
-                                    label_path=FULL_LABELPATH, batch_size=1, reshape=False, building_df=True)
+def create_form_dataset(filedir=FULL_DIR, labeldir=FULL_LABELPATH, outfile='full_dataset.xlsx', augment=False):
+    # if augment then ignore sslms and replace with [0, 0]
 
-    print("Done building dataloaders, merging...")
-    full_datagen = multi_input_generator(mls_full, sslm_cmcos_full, sslm_cmeuc_full, sslm_mfcos_full,
-                                         sslm_mfeuc_full, midi_full, concat=False, expand_dim_6=False)
-    print("Merging complete. Printing...")
+    mls_full = dus.BuildDataloader(os.path.join(filedir, 'MLS/'),
+                                   label_path=labeldir, batch_size=1, reshape=False)
+    midi_full = dus.BuildMIDIloader(os.path.join(filedir, 'MIDI/'),
+                                    label_path=labeldir, batch_size=1, reshape=False, building_df=True)
+    if not augment:
+        sslm_cmcos_full = dus.BuildDataloader(os.path.join(filedir, 'SSLM_CRM_COS/'),
+                                              label_path=labeldir, batch_size=1, reshape=False)
+        sslm_cmeuc_full = dus.BuildDataloader(os.path.join(filedir, 'SSLM_CRM_EUC/'),
+                                              label_path=labeldir, batch_size=1, reshape=False)
+        sslm_mfcos_full = dus.BuildDataloader(os.path.join(filedir, 'SSLM_MFCC_COS/'),
+                                              label_path=labeldir, batch_size=1, reshape=False)
+        sslm_mfeuc_full = dus.BuildDataloader(os.path.join(filedir, 'SSLM_MFCC_EUC/'),
+                                              label_path=labeldir, batch_size=1, reshape=False)
+
+        print("Done building dataloaders, merging...")
+        full_datagen = multi_input_generator(mls_full, sslm_cmcos_full, sslm_cmeuc_full, sslm_mfcos_full,
+                                             sslm_mfeuc_full, midi_full, concat=False, expand_dim_6=False)
+        print("Merging complete. Printing...")
+    else:
+        print("Done building dataloaders, merging...")
+        full_datagen = multi_input_generator(mls_full, None, None, None, None,
+                                             midi_full, concat=False, expand_dim_6=False, augment=True)
+        print("Merging complete. Printing...")
 
     np.set_string_function(
         lambda x: repr(x).replace('(', '').replace(')', '').replace('array', '').replace("       ", ' '), repr=False)
@@ -648,7 +661,7 @@ def create_form_dataset():
     for indx, cur_data in enumerate(full_datagen):
         if indx == len(mls_full):
             break
-        c_flname = mls_full.getSong(indx)
+        c_flname = mls_full.getSong(indx).replace(".wav.npy", "").replace(".wav", "").replace(".npy", "")
         c_sngdur = mls_full.getDuration(indx)
         c_slmmls = cur_data[0][0]
         c_scmcos = cur_data[0][1][0]
@@ -670,8 +683,103 @@ def create_form_dataset():
         df[col] = df[col].apply(lambda x: str(x)
                                 .replace(", dtype=float32", "").replace("],", "]")
                                 .replace("dtype=float32", "").replace("...,", ""))
-    # df.to_csv(os.path.join(MASTER_DIR, 'full_dataset.csv'), index=False)  # Improperly saves lists because of , delim
-    df.to_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'), index=False)
+    # df.to_csv(os.path.join(MASTER_DIR, 'full_dataset.csv'), index=False)
+    df.to_excel(os.path.join(MASTER_DIR, outfile), index=False)
+
+
+def prepare_augmented_audio(inpath=FULL_DIR, savepath='', augmentation=1):
+    if not os.path.exists(savepath):
+        os.makedirs(savepath)
+        print("New directory created:", savepath)
+
+    def inject_noise(adata, noise_factor):
+        noise = np.random.randn(len(adata))
+        augmented_data = adata + noise_factor * noise
+        augmented_data = augmented_data.astype(type(adata[0]))
+        return augmented_data
+
+    def shift_time(adata, sampling_rate, shift_max, shift_direction):
+        shift = np.random.randint(sampling_rate * shift_max)
+        if shift_direction == 'right':
+            shift = -shift
+        elif shift_direction == 'both':
+            direction = np.random.randint(0, 2)
+            if direction == 1:
+                shift = -shift
+        augmented_data = np.roll(adata, shift)
+        # Set to silence for heading/ tailing
+        if shift > 0:
+            augmented_data[:shift] = 0
+        else:
+            augmented_data[shift:] = 0
+        return augmented_data
+
+    def shift_pitch(adata, sampling_rate, pitch_factor):
+        return librosa.effects.pitch_shift(adata, sampling_rate, n_steps=pitch_factor)
+
+    def shift_speed(adata, speed_factor):
+        return librosa.effects.time_stretch(adata, speed_factor)
+
+    start_time = time.time()
+    for (dir_path, dnames, fnames) in os.walk(inpath):
+        for f in fnames:
+            augdatapath = savepath + f.split('.')[0] + '_aug' + str(augmentation) + '.wav'
+            if os.path.exists(augdatapath):
+                continue
+            start_time_song = time.time()
+            fdatapath = dir_path + '/' + f
+            y, sr = librosa.load(fdatapath, sr=None)
+            sr = 44100
+            if augmentation == 1:
+                y = shift_speed(y, 0.7)  # Slower
+                y = shift_pitch(y, sr, -6)  # Shift down 6 half-steps (tritone)
+                y = shift_time(y, sr, random.random(), 'right')
+                y = inject_noise(y, 0.005)
+            elif augmentation == 2:
+                y = shift_speed(y, 1.4)  # Faster
+                y = shift_pitch(y, sr, 4)  # Shift up 4 half-steps (major 3rd)
+                y = shift_time(y, sr, random.random(), 'right')
+                y = inject_noise(y, 0.01)
+            elif augmentation == 3:
+                y = shift_speed(y, 0.5)
+                y = shift_pitch(y, sr, 7)  # Shift up perfect 5th
+                y = shift_time(y, sr, random.random(), 'right')
+                y = inject_noise(y, 0.003)
+            elif augmentation == 4:
+                y = shift_speed(y, 2)
+                y = shift_pitch(y, sr, 8)  # Shift up minor 6th
+                y = shift_time(y, sr, random.random(), 'right')
+                y = inject_noise(y, 0.02)
+            elif augmentation == 5:
+                y = shift_speed(y, 1.1)
+                y = shift_pitch(y, sr, 1)  # Shift up major 7th
+                y = shift_time(y, sr, random.random(), 'right')
+                y = inject_noise(y, 0.007)
+            sf.write(augdatapath, y, sr)
+            print("Successfully saved file:", augdatapath, "\tDuration: {:.2f}s".format(time.time() - start_time_song))
+    print("All files have been converted. Duration: {:.2f}s".format(time.time() - start_time))
+    pass
+
+
+def generate_augmented_datasets():
+    # https://www.kaggle.com/CVxTz/audio-data-augmentation
+    # https://towardsdatascience.com/
+    #   audio-deep-learning-made-simple-part-3-data-preparation-and-augmentation-24c6e1f6b52
+    # https://medium.com/@makcedward/data-augmentation-for-audio-76912b01fdf6
+    for i in range(1, 6):
+        prepare_augmented_audio(savepath=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/MIDI/'), augmentation=i)
+        dus.util_main(feature="mls", inpath=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/'),
+                      midpath=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/'))
+        create_form_dataset(filedir=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/'), augment=True,
+                            outfile='full_dataset_aug' + str(i) + '.xlsx')
+    df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))
+    df1 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug1.xlsx'))
+    df2 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug2.xlsx'))
+    df3 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug3.xlsx'))
+    df4 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug4.xlsx'))
+    df5 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug5.xlsx'))
+    df = pd.concat([df, df1, df2, df3, df4, df5], ignore_index=True).reset_index()
+    df.to_excel(os.path.join(MASTER_DIR, 'full_augmented_dataset.xlsx'), index=False)
 
 
 def prepare_lstm_peaks():
@@ -1033,37 +1141,42 @@ def formnn_cnn_old(input_dim_1, filters=64, lrval=0.0001, numclasses=12):
 
 
 # region FormModel
-def formnn_cnn(input_dim_1, filters=8, lrval=0.0001, numclasses=12):
+def formnn_cnn(input_dim_1, filters=8, lrval=0.0001, numclasses=12, kernelsize=3):
     np.random.seed(9)
     X_input = Input(shape=(input_dim_1, 1))
 
-    X = layers.Conv1D(filters, kernel_size=3, strides=1, kernel_initializer=glorot_uniform(seed=9),
+    X = layers.Conv1D(filters, kernel_size=kernelsize, strides=1, kernel_initializer=glorot_uniform(seed=9),
                       bias_regularizer=l2(0.5))(X_input)
     X = layers.BatchNormalization(axis=2)(X)
     X = layers.Activation('relu')(X)
-    X = layers.MaxPooling1D(2)(X)
-    # X = layers.Dropout(0.2)(X)
+    X = layers.MaxPooling1D(6, padding='same')(X)
+    X = layers.Dropout(0.4)(X)
+    # X = layers.GaussianNoise(0.1)(X)
 
-    X = layers.Conv1D(filters * 2, kernel_size=3, strides=1, kernel_initializer=glorot_uniform(seed=9),
+    X = layers.Conv1D(filters * 2, kernel_size=kernelsize, strides=1, kernel_initializer=glorot_uniform(seed=9),
                       bias_regularizer=l2(0.5))(X)
     X = layers.BatchNormalization(axis=2)(X)
     X = layers.Activation('relu')(X)
-    X = layers.MaxPooling1D(2)(X)
-    # X = layers.Dropout(0.4)(X)
+    X = layers.MaxPooling1D(6, padding='same')(X)
+    X = layers.Dropout(0.4)(X)
+    # X = layers.GaussianNoise(0.1)(X)
 
-    X = layers.Conv1D(filters * 4, kernel_size=3, strides=1, kernel_initializer=glorot_uniform(seed=9),
+    X = layers.Conv1D(filters * 4, kernel_size=kernelsize, strides=1, kernel_initializer=glorot_uniform(seed=9),
                       bias_regularizer=l2(0.5))(X)
     X = layers.BatchNormalization(axis=2)(X)
     X = layers.Activation('relu')(X)
-    X = layers.MaxPooling1D(2)(X)
-    # X = layers.Dropout(0.4)(X)
+    X = layers.MaxPooling1D(6, padding='same')(X)
+    X = layers.Dropout(0.4)(X)
+    # X = layers.GaussianNoise(0.1)(X)
 
-    X = layers.Conv1D(filters * 8, kernel_size=3, strides=1, kernel_initializer=glorot_uniform(seed=9),
-                      bias_regularizer=l2(0.5))(X)
+    # X = layers.Conv1D(filters * 8, kernel_size=kernelsize, strides=1, kernel_initializer=glorot_uniform(seed=9),
+    #                   bias_regularizer=l2(0.5))(X)
+    X = layers.Dense(256, kernel_initializer=glorot_uniform(seed=9), bias_regularizer=l2(0.5))(X)
     X = layers.BatchNormalization(axis=-1)(X)
     X = layers.Activation('relu')(X)
-    X = layers.MaxPooling1D(2)(X)
-    # X = layers.Dropout(0.4)(X)
+    X = layers.MaxPooling1D(6, padding='same')(X)
+    X = layers.Dropout(0.4)(X)
+    # X = layers.GaussianNoise(0.1)(X)
 
     X = layers.Flatten()(X)
 
@@ -1077,19 +1190,42 @@ def formnn_cnn(input_dim_1, filters=8, lrval=0.0001, numclasses=12):
 
 
 def trainFormModel():
-    df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))
+    # region DataPreProcessing
+    df = pd.read_excel(os.path.join(MASTER_DIR, 'full_augmented_dataset.xlsx'))
+    # df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))
     names = df[['piece_name', 'composer', 'filename']]
     y = df['formtype']
+    # """
+    # TODO: for augmented dataset
+    df = df.drop(columns=['sslm_chroma_cos_mean', 'sslm_chroma_cos_var', 'sslm_chroma_euc_mean', 'sslm_chroma_euc_var', 
+                          'sslm_mfcc_cos_mean', 'sslm_mfcc_cos_var', 'sslm_mfcc_euc_mean', 'sslm_mfcc_euc_var'])
+    # """
     df.drop(columns=['spectral_bandwidth_var', 'spectral_centroid_var', 'spectral_flatness_var', 'spectral_rolloff_var',
                      'zero_crossing_var', 'fourier_tempo_mean', 'fourier_tempo_var'], inplace=True)  # Remove useless
-    nonlist = df[['duration', 'spectral_contrast_var']]
+    # nonlist = df[['duration', 'spectral_contrast_var']]
+    nonlist = df[['duration']]
     df.drop(columns=['piece_name', 'composer', 'filename', 'duration', 'spectral_contrast_var', 'formtype'],
             inplace=True)
+    # df = df[['ssm_log_mel_mean', 'ssm_log_mel_var']]
+    df = df[['ssm_log_mel_mean']]
+    print("Fixing broken array cells as needed...")
 
-    d = [pd.DataFrame(df[col].astype(str).apply(literal_eval).values.tolist()).add_prefix(col) for col in df.columns]
+    def fix_broken_arr(strx):
+        if '[' in strx:
+            if ']' in strx:
+                return strx
+            else:
+                return strx + ']'
+
+    for col in df.columns:
+        df[col] = df[col].apply(lambda x: fix_broken_arr(x))
+    print("Done processing cells, building training set...")
+
+    # d = [pd.DataFrame(df[col].astype(str).apply(literal_eval).values.tolist()).add_prefix(col) for col in df.columns]
+    d = [pd.DataFrame(df[col].astype(str).apply(literal_eval).values.tolist()) for col in df.columns]
     df = pd.concat(d, axis=1).fillna(0)
     df = pd.concat([pd.concat([names, pd.concat([nonlist, df], axis=1)], axis=1), y], axis=1)  # print(df)
-    train, test = train_test_split(df, test_size=0.169, random_state=0, stratify=df['formtype'])  # 0.3 gave 31%
+    train, test = train_test_split(df, test_size=0.169, random_state=0, stratify=df['formtype'])  # test_s=.169 gave 50%
     # df.to_csv(os.path.join(MASTER_DIR, 'full_modified_dataset.csv'))
 
     X_train = train.iloc[:, 3:-1]
@@ -1134,16 +1270,11 @@ def trainFormModel():
     clf.predict(X_test)
     print("Decision tree accuracy:", clf.score(X_test, y_test))
 
-    clf = RandomForestClassifier(n_estimators=64)
-    clf.fit(X_train, y_train)
-    clf.predict(X_test)
-    print("Random forest accuracy:", clf.score(X_test, y_test), "\n")
-
     """ FEATURE TUNING """
     # https://curiousily.com/posts/hackers-guide-to-fixing-underfitting-and-overfitting-models/
     # https://towardsdatascience.com/handling-overfitting-in-deep-learning-models-c760ee047c6e
     # https://machinelearningmastery.com/rfe-feature-selection-in-python/
-    selector = SelectKBest(f_classif, k=5000)
+    selector = SelectKBest(f_classif, k=25)  # 1000 if using RFE
     Z_train = selector.fit_transform(X_train, old_y_train)
     skb_values = selector.get_support()
     Z_test = X_test[:, skb_values]
@@ -1159,15 +1290,6 @@ def trainFormModel():
     plt.show()
     """
     print("Indices of top 10 features:", (-selector.scores_).argsort()[:10])
-    """
-    # https://towardsdatascience.com/dont-overfit-how-to-prevent-overfitting-in-your-deep-learning-models-63274e552323
-    clf = LinearSVC(C=0.01, penalty="l1", dual=False)
-    clf.fit(X_train, old_y_train)
-    rfe_selector = RFE(clf, 10)
-    rfe_selector = rfe_selector.fit(X_train, old_y_train)
-    rfe_values = rfe_selector.get_support()
-    print("Indices of least important features:", np.where(rfe_values)[0])
-    """
 
     """ KBEST MODEL """
     clf = tree.DecisionTreeClassifier()
@@ -1175,18 +1297,51 @@ def trainFormModel():
     clf.predict(Z_test)
     print("K-Best Decision tree accuracy:", clf.score(Z_test, y_test))
 
-    clf = RandomForestClassifier(n_estimators=128)
-    clf.fit(X_train, y_train)
-    clf.predict(X_test)
-    print("K-Best Random forest accuracy:", clf.score(X_test, y_test), "\n")
+    """
+    # Accuracy 0.211, stick with SKB? Gives good loss though
+    # https://towardsdatascience.com/dont-overfit-how-to-prevent-overfitting-in-your-deep-learning-models-63274e552323
+    clf = LinearSVC(C=0.01, penalty="l1", dual=False)
+    clf.fit(X_train, old_y_train)
+    rfe_selector = RFE(clf, 10, verbose=5)
+    rfe_selector = rfe_selector.fit(Z_train, old_y_train)
+    # rfe_selector = rfe_selector.fit(X_train, old_y_train)
+    rfe_values = rfe_selector.get_support()
+    # np.save(os.path.join(MASTER_DIR, "rfebest_indicies.npy"), rfe_values)
+    print("Indices of least important features:", np.where(rfe_values)[0])
+    W_train = Z_train[:, rfe_values]
+    W_test = Z_test[:, rfe_values]
+
+    # "" " RFE MODEL " ""
+    clf = tree.DecisionTreeClassifier()
+    clf = clf.fit(W_train, y_train)
+    clf.predict(W_test)
+    print("RFE Decision tree accuracy:", clf.score(W_test, y_test))
+    """
+    # endregion
 
     # Reshape to 3D tensor for keras
-    X_train = Z_train[:, :, np.newaxis]
-    X_test = Z_test[:, :, np.newaxis]
-    # X_train = X_train[:, :, np.newaxis]
-    # X_test = X_test[:, :, np.newaxis]
+    # X_train = Z_train[:, :, np.newaxis]
+    # X_test = Z_test[:, :, np.newaxis]
+    # X_train = W_train[:, :, np.newaxis]
+    # X_test = W_test[:, :, np.newaxis]
+    X_train = X_train[:, :, np.newaxis]
+    X_test = X_test[:, :, np.newaxis]
 
-    model = formnn_cnn(X_train.shape[1], filters=8, lrval=0.00003, numclasses=len(label_encoder.classes_))
+    """
+    clf = ak.StructuredDataClassifier(overwrite=True, max_trials=3)
+    model_history = clf.fit(Z_train, y_train, epochs=10)
+    predicted_y = clf.predict(Z_test)
+    print(predicted_y)
+    print(clf.evaluate(Z_test, y_test))
+    model = clf.export_model()
+    model.summary()
+    # model.save('best_auto_model.h5', save_format='tf')
+    if not os.path.isfile(os.path.join(MASTER_DIR, 'FormNN_CNN_AutoModel_Diagram.png')):
+        plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_CNN_AutoModel_Diagram.png'),
+                   show_shapes=True, show_layer_names=True, expand_nested=True, dpi=300)
+    """
+
+    model = formnn_cnn(X_train.shape[1], filters=8, lrval=0.0003, numclasses=len(label_encoder.classes_), kernelsize=3)
     model.summary()
     if not os.path.isfile(os.path.join(MASTER_DIR, 'FormNN_CNN_Model_Diagram.png')):
         plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_CNN_Model_Diagram.png'),
@@ -1215,10 +1370,11 @@ def trainFormModel():
     return
     """
 
-    model.load_weights('best_form_model_44p.hdf5')
-    while True:
+    # model.load_weights('best_form_model_44p.hdf5')
+    # while True:
+    for i in range(0, 500):
         # early_stopping = EarlyStopping(monitor='val_loss', patience=5, verbose=5, mode="auto")
-        checkpoint = ModelCheckpoint("best_form_model.hdf5", monitor='val_accuracy', verbose=1,
+        checkpoint = ModelCheckpoint("best_form_new_model.hdf5", monitor='val_accuracy', verbose=0,
                                      save_best_only=False, mode='max', save_freq='epoch', save_weights_only=True)
         model_history = model.fit(X_train, y_train, batch_size=32, epochs=1, validation_data=(X_test, y_test),
                                   callbacks=[checkpoint])  # , early_stopping  epochs=2000 loss hits 0.7
@@ -1228,71 +1384,70 @@ def trainFormModel():
         history_accuracy.append(model_history.history['accuracy'])
         history_val_accuracy.append(model_history.history['val_accuracy'])
 
-        print("\nEvaluating...")
-        score = model.evaluate(X_test, y_test, verbose=1)
-        print("Evaluation complete!\n__________Score__________")
-        print(f"Loss: {score[0]}\tAccuracy: {score[1]}")
-
         num_epochs += 1
         print("Epochs completed:", num_epochs)
 
-        if score[1] >= 0.51:
-            # region EvaluationGraphs
-            plt.plot(history_loss)  # plt.plot(model_history.history['loss'])
-            plt.plot(history_val_loss)  # plt.plot(model_history.history['val_loss'])
-            plt.title('Model Loss')
-            plt.ylabel('Loss')
-            plt.xlabel('Epoch')
-            plt.legend(['train', 'test'], loc='upper left')
-            plt.savefig('Initial_Model_Loss.png')
-            plt.show()
+    print("\nEvaluating...")
+    score = model.evaluate(X_test, y_test, verbose=1)
+    print("Evaluation complete!\n__________Score__________")
+    print(f"Loss: {score[0]}\tAccuracy: {score[1]}")
 
-            plt.plot(history_accuracy)  # plt.plot(model_history.history['accuracy'])
-            plt.plot(history_val_accuracy)  # plt.plot(model_history.history['val_accuracy'])
-            plt.title('Model Accuracy')
-            plt.ylabel('Accuracy')
-            plt.xlabel('Epoch')
-            plt.legend(['Train', 'Test'], loc='upper left')
-            plt.savefig('Initial_Model_Accuracy.png')
-            plt.show()
+    # if score[1] >= 0.51:
+    # region EvaluationGraphs
+    plt.plot(history_loss)  # plt.plot(model_history.history['loss'])
+    plt.plot(history_val_loss)  # plt.plot(model_history.history['val_loss'])
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['train', 'test'], loc='upper left')
+    plt.savefig('Initial_Model_Loss.png')
+    plt.show()
 
-            # pd.DataFrame(model_history.history).plot()
-            # plt.show()
+    plt.plot(history_accuracy)  # plt.plot(model_history.history['accuracy'])
+    plt.plot(history_val_accuracy)  # plt.plot(model_history.history['val_accuracy'])
+    plt.title('Model Accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Test'], loc='upper left')
+    plt.savefig('Initial_Model_Accuracy.png')
+    plt.show()
 
-            predictions = model.predict(X_test, verbose=1)
-            predictions = predictions.argmax(axis=1)
-            predictions = predictions.astype(int).flatten()
-            predictions = (label_encoder.inverse_transform(predictions))
-            predictions = pd.DataFrame({'Predicted Values': predictions})
+    # pd.DataFrame(model_history.history).plot()
+    # plt.show()
 
-            actual = y_test.argmax(axis=1)
-            actual = actual.astype(int).flatten()
-            actual = (label_encoder.inverse_transform(actual))
-            actual = pd.DataFrame({'Actual Values': actual})
+    predictions = model.predict(X_test, verbose=1)
+    predictions = predictions.argmax(axis=1)
+    predictions = predictions.astype(int).flatten()
+    predictions = (label_encoder.inverse_transform(predictions))
+    predictions = pd.DataFrame({'Predicted Values': predictions})
 
-            cm = confusion_matrix(actual, predictions)
-            plt.figure(figsize=(12, 10))
-            cm = pd.DataFrame(cm, index=[i for i in label_encoder.classes_], columns=[i for i in label_encoder.classes_])
-            ax = sns.heatmap(cm, linecolor='white', cmap='Blues', linewidth=1, annot=True, fmt='')
-            bottom, top = ax.get_ylim()
-            ax.set_ylim(bottom + 0.5, top - 0.5)
-            plt.title('Confusion Matrix', size=20)
-            plt.xlabel('Predicted Labels', size=14)
-            plt.ylabel('Actual Labels', size=14)
-            plt.savefig('Initial_Model_Confusion_Matrix.png')
-            plt.show()
-            clf_report = classification_report(actual, predictions, output_dict=True,
-                                               target_names=[i for i in label_encoder.classes_])
-            sns.heatmap(pd.DataFrame(clf_report).iloc[:, :].T, annot=True, cmap='viridis')
-            plt.title('Classification Report', size=20)
-            plt.savefig('Initial_Model_Classification_Report.png')
-            plt.show()
-            break
+    actual = y_test.argmax(axis=1)
+    actual = actual.astype(int).flatten()
+    actual = (label_encoder.inverse_transform(actual))
+    actual = pd.DataFrame({'Actual Values': actual})
 
-        elif num_epochs >= 50:
-            model.load_weights('best_form_model_44p.hdf5')
-            num_epochs = 0
-            continue
+    cm = confusion_matrix(actual, predictions)
+    plt.figure(figsize=(12, 10))
+    cm = pd.DataFrame(cm, index=[i for i in label_encoder.classes_], columns=[i for i in label_encoder.classes_])
+    ax = sns.heatmap(cm, linecolor='white', cmap='Blues', linewidth=1, annot=True, fmt='')
+    bottom, top = ax.get_ylim()
+    ax.set_ylim(bottom + 0.5, top - 0.5)
+    plt.title('Confusion Matrix', size=20)
+    plt.xlabel('Predicted Labels', size=14)
+    plt.ylabel('Actual Labels', size=14)
+    plt.savefig('Initial_Model_Confusion_Matrix.png')
+    plt.show()
+    clf_report = classification_report(actual, predictions, output_dict=True,
+                                       target_names=[i for i in label_encoder.classes_])
+    sns.heatmap(pd.DataFrame(clf_report).iloc[:, :].T, annot=True, cmap='viridis')
+    plt.title('Classification Report', size=20)
+    plt.savefig('Initial_Model_Classification_Report.png')
+    plt.show()
+    # break
+    # elif num_epochs >= 50:
+    #     model.load_weights('best_form_model_44p.hdf5')
+    #     num_epochs = 0
+    #     continue
     # endregion
     pass
 
@@ -1478,7 +1633,7 @@ def predictForm():
 def formnn_lstm(n_timesteps, mode='concat'):  # Try 'ave', 'mul', and 'sum' also
     model = Sequential()
     model.add(layers.Bidirectional(
-        layers.LSTM(20, return_sequences=True), input_shape=(n_timesteps, 1), merge_mode=mode))
+        layers.LSTM(20, return_sequences=True), input_shape=(None, 1), merge_mode=mode))
     model.add(layers.TimeDistributed(
         layers.Dense(1, activation='sigmoid')))
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -1508,9 +1663,21 @@ def trainLabelModel_helper(model, n_timesteps, num_epochs=250):
     # history_val_loss = []
     history_accuracy = []
     # history_val_accuracy = []
-    for i in range(num_epochs):
-        X, y = get_sequence(n_timesteps)  # generate new random sequence
-        model_history = model.fit(X, y, epochs=1, batch_size=1, verbose=1)  # , callbacks=[checkpoint])
+    tr_set = pd.DataFrame(du.ReadLabelSecondsPhrasesFromFolder(FULL_LABELPATH, valid_only=True)[0:2]).transpose()
+    tr_set = np.array(tr_set)
+    # print(tr_set)
+    # for i in range(num_epochs):
+    for i in range(tr_set.shape[0]):
+        Xt = tr_set[i][0]
+        yt = tr_set[i][1]
+        Xt = Xt.reshape(1, len(Xt), 1)
+        yt = yt.reshape(1, len(yt), 1)
+        # print(Xt)
+        # print(yt)
+        # X, y = get_sequence(n_timesteps)  # generate new random sequence
+        X, y = get_sequence(tr_set.shape[0])  # generate new random sequence
+        # print(X, y)
+        model_history = model.fit(Xt, yt, epochs=1, batch_size=1, verbose=1)  # , callbacks=[checkpoint])
         history_loss.append(model_history.history['loss'])
         # history_val_loss.append(model_history.history['val_loss'])
         history_accuracy.append(model_history.history['accuracy'])
@@ -1521,6 +1688,8 @@ def trainLabelModel_helper(model, n_timesteps, num_epochs=250):
 
 
 def trainLabelModel():
+    # TODO: Model should take in timestamp array (X) and labels (y) for training, eval only provide novelty timestamps
+
     n_timesteps = 10
     model = formnn_lstm(n_timesteps, mode='concat')
     model_history = trainLabelModel_helper(model, n_timesteps, num_epochs=250)
@@ -1566,11 +1735,15 @@ if __name__ == '__main__':
     # prepare_model_training_input()
     # prepare_train_data()
     # buildValidationSet()
-    # trainFormModel()
-    # predictForm()
-    # prepare_lstm_peaks()
-    trainLabelModel()
     # create_form_dataset()
+
+    # TODO: try to get 60-70% val_acc. Try data augmentation
+    # generate_augmented_datasets()
+    trainFormModel()
+    # predictForm()
+
+    # prepare_lstm_peaks()
+    # trainLabelModel()
     print("\nDone!")
 
     # Measure confidence level? Prediction Interval (PI)

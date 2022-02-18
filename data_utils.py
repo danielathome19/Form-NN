@@ -712,7 +712,7 @@ def ReadLabelsFromLine(line):
     labels = re.split(r'\s\s*', line)[1:]
     for i in range(len(labels)):
         labels[i] = labels[i].replace(',', '')
-    return labels
+    return np.asarray(labels).astype(object)
 
 
 def ReadImagesFromFolder(directory):
@@ -738,15 +738,20 @@ def ReadDataFromtxt(directory, archive):
         numbers.append(ReadNumbersFromLine(line))
         labels.append(ReadLabelsFromLine(line.rstrip()))
     file.close()
-    return numbers, labels, form
+    return numbers, np.asarray(labels).astype(object), form
 
 
-def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1):
+def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1, valid_only=False):
     nums = []
     lbls = []
     forms = []
     for (lbl_dir_path, lbl_dnames, lbl_fnames) in os.walk(lblpath):
         for f in lbl_fnames:
+            if valid_only:
+                num_lines = sum(1 for _ in open(lbl_dir_path + f))
+                if num_lines <= 3:
+                    # print("File has not been labeled with ground truth yet. Skipping...")
+                    continue
             if stop != -1:
                 stop -= 1
                 if stop == 0:
@@ -781,7 +786,7 @@ def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1):
     onehot_labels = onehot_encoder.fit_transform(integer_encoded)  # print(onehot_encoded)
     # inverted = label_encoder.inverse_transform([argmax(onehot_encoded[0, :])])  # Return original label from encoding
     """
-    return nums, lbls, tf.expand_dims(onehot_encoded, axis=-1)
+    return nums, np.asarray(lbls), tf.expand_dims(onehot_encoded, axis=-1)
 
 
 def prepend_line(file_name, line):

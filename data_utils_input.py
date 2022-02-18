@@ -240,28 +240,28 @@ def util_main_helper(feature, filepath, mode="cos", predict=False, savename=""):
         return sslm_near
 
 
-def util_main(feature, mode="cos", predict=False):
+def util_main(feature, mode="cos", predict=False, inpath=TRAIN_DIR, midpath=MIDI_DIR):
     img_path = ""
 
     if feature == "mfcc":
         if mode == "cos":
-            img_path = os.path.join(TRAIN_DIR, 'SSLM_MFCC_COS/')
+            img_path = os.path.join(inpath, 'SSLM_MFCC_COS/')
         elif mode == "euc":
-            img_path = os.path.join(TRAIN_DIR, 'SSLM_MFCC_EUC/')
+            img_path = os.path.join(inpath, 'SSLM_MFCC_EUC/')
     elif feature == "chroma":
         if mode == "cos":
-            img_path = os.path.join(TRAIN_DIR, 'SSLM_CRM_COS/')
+            img_path = os.path.join(inpath, 'SSLM_CRM_COS/')
         elif mode == "euc":
-            img_path = os.path.join(TRAIN_DIR, 'SSLM_CRM_EUC/')
+            img_path = os.path.join(inpath, 'SSLM_CRM_EUC/')
     elif feature == "mls":
-        img_path = os.path.join(TRAIN_DIR, 'MLS/')
+        img_path = os.path.join(inpath, 'MLS/')
 
     if not os.path.exists(img_path):
         os.makedirs(img_path)
 
-    num_songs = sum([len(files) for r, d, files in os.walk(MIDI_DIR)])
+    num_songs = sum([len(files) for r, d, files in os.walk(midpath)])
     i = 0
-    for folder in gb.glob(os.path.join(MASTER_DIR, 'Data/MIDIs/*')):
+    for folder in gb.glob(midpath + "*"):
         for file in os.listdir(folder):
             # foldername = folder.split('\\')[-1]
             name_song, name = file, file.split('/')[-1].split('.')[0]
@@ -604,19 +604,24 @@ class BuildMIDIloader(k.utils.Sequence):
         print("Building dataloader for " + self.midi_path)
         df = get_midi_dataframe(building_df)
         cnt = 1
+        audio_extenions = ["3gp", "aa", "aac", "aax", "act", "aiff", "alac", "amr", "ape", "au", "awb", "dct",
+                           "dss", "dvf", "flac", "gsm", "iklax", "ivs", "m4a", "m4b", "m4p", "mmf", "mp3", "mpc",
+                           "msv", "nmf", "ogg", "oga", "mogg", "opus", "ra", "rm", "raw", "rf64", "sln", "tta",
+                           "voc", "vox", "wav", "wma", "wv", "webm", "8svx", "cda", "mid", "midi", "mp4"]
         for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(self.midi_path):
             for f in mid_filenames:
-                if f.endswith('.mid') or f.endswith('.midi'):
+                if f.endswith(tuple(audio_extenions)):
                     self.songs_list.append(os.path.splitext(f)[0])
                     print("Reading file #" + str(cnt))
                     mid_path = mid_dirpath + f
                     # print("Working on file: " + f)
-                    df = get_midi_dataframe(df, cnt-1, mid_path, building_df)
+                    df = get_audio_features(df, cnt-1, mid_path, building_df)
                     cnt += 1
                     if end != -1:
                         if cnt == end:
                             break
         # df = pd.DataFrame(df['spectral_contrast'].values.tolist())
+        print(cnt)
         df = df.fillna(0)
         if reshape:
             mean = np.mean(df, axis=0)
