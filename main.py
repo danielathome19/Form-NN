@@ -31,7 +31,7 @@ from tensorflow.keras.layers import Input, Flatten, Dropout, Activation, BatchNo
 from sklearn.model_selection import GridSearchCV
 from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 from tensorflow.keras.optimizers import SGD
-from tensorflow.keras.regularizers import l2
+from tensorflow.keras.regularizers import l1, l2
 import seaborn as sns
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.utils import to_categorical
@@ -1146,44 +1146,47 @@ def formnn_cnn(input_dim_1, filters=8, lrval=0.0001, numclasses=12, kernelsize=3
     X_input = Input(shape=(input_dim_1, 1))
 
     X = layers.Conv1D(filters, kernel_size=kernelsize, strides=1, kernel_initializer=glorot_uniform(seed=9),
-                      bias_regularizer=l2(0.5))(X_input)
+                      bias_regularizer=l2(0.000001), kernel_regularizer=l2(0.00001))(X_input)
     X = layers.BatchNormalization(axis=2)(X)
     X = layers.Activation('relu')(X)
-    X = layers.MaxPooling1D(6, padding='same')(X)
-    X = layers.Dropout(0.4)(X)
+    X = layers.MaxPooling1D(numclasses, padding='same')(X)
+    X = layers.Dropout(0.5)(X)
     # X = layers.GaussianNoise(0.1)(X)
 
     X = layers.Conv1D(filters * 2, kernel_size=kernelsize, strides=1, kernel_initializer=glorot_uniform(seed=9),
-                      bias_regularizer=l2(0.5))(X)
+                      bias_regularizer=l2(0.000001), kernel_regularizer=l2(0.00001))(X)
     X = layers.BatchNormalization(axis=2)(X)
     X = layers.Activation('relu')(X)
-    X = layers.MaxPooling1D(6, padding='same')(X)
-    X = layers.Dropout(0.4)(X)
+    X = layers.MaxPooling1D(numclasses, padding='same')(X)
+    X = layers.Dropout(0.5)(X)
     # X = layers.GaussianNoise(0.1)(X)
 
     X = layers.Conv1D(filters * 4, kernel_size=kernelsize, strides=1, kernel_initializer=glorot_uniform(seed=9),
-                      bias_regularizer=l2(0.5))(X)
+                      bias_regularizer=l2(0.000001), kernel_regularizer=l2(0.00001))(X)
     X = layers.BatchNormalization(axis=2)(X)
     X = layers.Activation('relu')(X)
-    X = layers.MaxPooling1D(6, padding='same')(X)
-    X = layers.Dropout(0.4)(X)
-    # X = layers.GaussianNoise(0.1)(X)
-
-    # X = layers.Conv1D(filters * 8, kernel_size=kernelsize, strides=1, kernel_initializer=glorot_uniform(seed=9),
-    #                   bias_regularizer=l2(0.5))(X)
-    X = layers.Dense(256, kernel_initializer=glorot_uniform(seed=9), bias_regularizer=l2(0.5))(X)
-    X = layers.BatchNormalization(axis=-1)(X)
-    X = layers.Activation('relu')(X)
-    X = layers.MaxPooling1D(6, padding='same')(X)
-    X = layers.Dropout(0.4)(X)
+    X = layers.MaxPooling1D(numclasses, padding='same')(X)
+    X = layers.Dropout(0.5)(X)
     # X = layers.GaussianNoise(0.1)(X)
 
     X = layers.Flatten()(X)
 
-    X = layers.Dense(numclasses, activation='softmax', kernel_initializer=glorot_uniform(seed=9),
-                     bias_regularizer=l2(0.5))(X)
+    # X = layers.Conv1D(filters * 8, kernel_size=kernelsize, strides=1, kernel_initializer=glorot_uniform(seed=9),
+    #                   bias_regularizer=l2(0.5))(X)
+    X = layers.Dense(256, kernel_initializer=glorot_uniform(seed=9), bias_regularizer=l2(0.000001), kernel_regularizer=l2(0.00001))(X)
+    X = layers.BatchNormalization(axis=-1)(X)
+    X = layers.Activation('relu')(X)
+    # X = layers.MaxPooling1D(numclasses, padding='same')(X)
+    X = layers.Dropout(0.5)(X)
+    # X = layers.GaussianNoise(0.1)(X)
 
-    opt = keras.optimizers.Adam(learning_rate=lrval)
+    # X = layers.Flatten()(X)
+
+    X = layers.Dense(numclasses, activation='sigmoid', kernel_initializer=glorot_uniform(seed=9),
+                     bias_regularizer=l2(0.000001), kernel_regularizer=l2(0.0001))(X)
+
+    # opt = keras.optimizers.Adam(lr=lrval)
+    opt = keras.optimizers.SGD(lr=lrval, decay=1e-6, momentum=0.9, nesterov=True)
     model = keras.models.Model(inputs=X_input, outputs=X, name='FormModel')
     model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
     return model
@@ -1206,8 +1209,9 @@ def trainFormModel():
     nonlist = df[['duration']]
     df.drop(columns=['piece_name', 'composer', 'filename', 'duration', 'spectral_contrast_var', 'formtype'],
             inplace=True)
+    # df = df[['ssm_log_mel_mean', 'ssm_log_mel_var', 'mel_mean', 'mel_var', 'chroma_stft_mean', 'chroma_stft_var']]
     # df = df[['ssm_log_mel_mean', 'ssm_log_mel_var']]
-    df = df[['ssm_log_mel_mean']]
+    # df = df[['ssm_log_mel_mean']]  # best decision tree accuracy
     print("Fixing broken array cells as needed...")
 
     def fix_broken_arr(strx):
@@ -1238,9 +1242,19 @@ def trainFormModel():
     print("Test shape:", X_test.shape)
 
     # Normalize Data
+    """
     min_max_scaler = preprocessing.MinMaxScaler()
-    X_train = min_max_scaler.fit_transform(X_train)
+    X_train = min_max_scaler.fit_transform(X_train)  # Good for decision tree
     X_test = min_max_scaler.fit_transform(X_test)
+    """
+    X_train = preprocessing.scale(X_train)
+    X_test = preprocessing.scale(X_test)
+    """
+    mean = np.mean(X_train, axis=0)
+    std = np.std(X_train, axis=0)
+    X_train = (X_train - mean) / std  # Good for decision tree
+    X_test = (X_test - mean) / std
+    """
     print("Normalized Train shape:", X_train.shape)
     print("Normalized Test shape:", X_test.shape)
 
@@ -1341,7 +1355,7 @@ def trainFormModel():
                    show_shapes=True, show_layer_names=True, expand_nested=True, dpi=300)
     """
 
-    model = formnn_cnn(X_train.shape[1], filters=8, lrval=0.0003, numclasses=len(label_encoder.classes_), kernelsize=3)
+    model = formnn_cnn(X_train.shape[1], filters=32, lrval=0.003, numclasses=len(label_encoder.classes_), kernelsize=10)
     model.summary()
     if not os.path.isfile(os.path.join(MASTER_DIR, 'FormNN_CNN_Model_Diagram.png')):
         plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_CNN_Model_Diagram.png'),
@@ -1372,7 +1386,7 @@ def trainFormModel():
 
     # model.load_weights('best_form_model_44p.hdf5')
     # while True:
-    for i in range(0, 500):
+    for i in range(0, 1500):
         # early_stopping = EarlyStopping(monitor='val_loss', patience=5, verbose=5, mode="auto")
         checkpoint = ModelCheckpoint("best_form_new_model.hdf5", monitor='val_accuracy', verbose=0,
                                      save_best_only=False, mode='max', save_freq='epoch', save_weights_only=True)
