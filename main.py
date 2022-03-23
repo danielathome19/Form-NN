@@ -88,6 +88,7 @@ from tensorflow.keras.layers.experimental import RandomFourierFeatures
 from XBNet.training_utils import training, predict
 from XBNet.models import XBNETClassifier
 from XBNet.run import run_XBNET
+import lightgbm as lgb
 from treegrad import TGDClassifier
 
 
@@ -2050,6 +2051,15 @@ def trainFormModel():
     acc = accuracy_score(int_y_test, model.predict(X_test))
     print('TreeGrad Deep Neural Decision Forest accuracy: ', acc)
 
+    print('Plotting 0th tree...')  # one tree use categorical feature to split
+    ax = lgb.plot_tree(model.base_model_, tree_index=0, figsize=(15, 15), show_info=['split_gain'])
+    plt.savefig('TreeGrad_Model.png')
+    plt.show()
+    print('Plotting feature importances...')
+    ax = lgb.plot_importance(model.base_model_, max_num_features=15)
+    plt.savefig('TreeGrad_Feature_Importance.png')
+    plt.show()
+
     predictions = model.predict(X_test)
     # predictions = predictions.argmax(axis=1)
     predictions = predictions.astype(int).flatten()
@@ -2199,6 +2209,11 @@ def predictForm():
         model = pickle.load(f)
     result = model.predict(X_test)
 
+    plt.figure(figsize=(30, 20))  # set plot size (denoted in inches)
+    tree.plot_tree(model.base_model_, fontsize=10)
+    plt.show()
+    plt.savefig('treegrad_high_dpi', dpi=100)
+
     for i in range(X_test.shape[0]):
         print("Performing predictions on", X_test_names[i])
         resultlbl = label_encoder.inverse_transform([result[i]])
@@ -2216,6 +2231,7 @@ def formnn_lstm(n_timesteps, mode='concat'):  # Try 'ave', 'mul', and 'sum' also
     model.add(layers.TimeDistributed(
         layers.Dense(1, activation='sigmoid')))
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    # print(model.metrics_names)
     return model
 
 
@@ -2256,10 +2272,10 @@ def trainLabelModel_helper(model, n_timesteps, num_epochs=250):
         # X, y = get_sequence(n_timesteps)  # generate new random sequence
         X, y = get_sequence(tr_set.shape[0])  # generate new random sequence
         # print(X, y)
-        model_history = model.fit(Xt, yt, epochs=1, batch_size=1, verbose=1)  # , callbacks=[checkpoint])
+        model_history = model.fit(X, y, epochs=1, batch_size=1, verbose=1)  # , callbacks=[checkpoint])
         history_loss.append(model_history.history['loss'])
         # history_val_loss.append(model_history.history['val_loss'])
-        history_accuracy.append(model_history.history['accuracy'])
+        history_accuracy.append(model_history.history['acc'])
         # history_val_accuracy.append(model_history.history['val_accuracy'])
         print("Epochs completed:", i)
     # return [history_loss, history_val_loss, history_accuracy, history_val_accuracy]
