@@ -17,8 +17,7 @@ from matplotlib.pyplot import specgram
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.metrics import confusion_matrix, accuracy_score
-# import IPython.display as ipd  # To play sound in the notebook
-import os  # interface with underlying OS that python is running on
+import os
 import soundfile as sf
 import sys
 import warnings
@@ -90,7 +89,6 @@ from XBNet.training_utils import training, predict
 from XBNet.models import XBNETClassifier
 from XBNet.run import run_XBNET
 from treegrad import TGDClassifier
-# from deep_autoviml import deep_autoviml as deepauto
 
 
 k.set_image_data_format('channels_last')
@@ -103,6 +101,7 @@ for gpu in gpus:
 if not sys.warnoptions:
     warnings.simplefilter("ignore")  # ignore warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 
 # region Directories
 # MASTER_DIR = '/home/ubuntu/masterthesis/Master Thesis/'
@@ -518,306 +517,6 @@ def combine_generator(gen1, gen2):
 # endregion
 
 
-# region DataTools
-def generate_label_files():
-    """
-    Generate label '.txt' file for each MIDI in its respective Form-folder.
-    Pre-timestamps each file with silence and end times
-    """
-    cnt = 1
-    for folder in MIDI_Data_Dir:
-        for file in os.listdir(folder):
-            foldername = folder.split('\\')[-1]
-            filename, name = file, file.split('/')[-1].split('.')[0]
-            print(f"\nWorking on {os.path.basename(name)}, file #" + str(cnt))
-
-            path = os.path.join(os.path.join(MASTER_DIR, 'Labels/'), foldername) + '/' + os.path.basename(name) + '.txt'
-            if not os.path.exists(path):
-                with audioread.audio_open(folder + '/' + filename) as f:
-                    print("Reading duration of " + os.path.basename(name))
-                    totalsec = f.duration
-                fwrite = open(path, "w+")
-                fwrite.write("0.000\tSilence\n" + str(totalsec) + '00\tEnd')
-                fwrite.close()
-            cnt += 1
-
-
-def get_total_duration():
-    """
-    Return the sum of all audio file durations together
-    """
-    dur_sum = 0
-    for folder in MIDI_Data_Dir:
-        for file in os.listdir(folder):
-            filename, name = file, file.split('/')[-1].split('.')[0]
-            with audioread.audio_open(folder + '/' + filename) as f:
-                dur_sum += f.duration
-    print("Total duration: " + str(dur_sum) + " seconds")
-    # Total duration: 72869.0 seconds
-    # = 1214.4833 minutes = 20.241389 hours = 20 hours, 14 minutes, 29 seconds
-    return dur_sum
-
-
-def prepare_model_training_input():
-    print("Preparing MLS inputs")
-    dus.util_main(feature="mls")
-
-    print("\nPreparing SSLM-MFCC-COS inputs")
-    dus.util_main(feature="mfcc", mode="cos")
-    print("\nPreparing SSLM-MFCC-EUC inputs")
-    dus.util_main(feature="mfcc", mode="euc")
-
-    print("\nPreparing SSLM-CRM-COS inputs")
-    dus.util_main(feature="chroma", mode="cos")
-    print("\nPreparing SSLM-CRM-EUC inputs")
-    dus.util_main(feature="chroma", mode="euc")
-
-
-def multi_input_generator_helper(gen1, gen2, gen3, gen4, concat=True):
-    while True:
-        sslm1 = next(gen1)[0]
-        sslm2 = next(gen2)[0]
-        sslm3 = next(gen3)[0]
-        sslm4 = next(gen4)[0]
-        if not concat:
-            yield [sslm1, sslm2, sslm3, sslm4], sslm1.shape
-            continue
-
-        if sslm2.shape != sslm1.shape:
-            sslm2 = resize(sslm2, sslm1.shape)
-        if sslm3.shape != sslm1.shape:
-            sslm3 = resize(sslm3, sslm1.shape)
-        if sslm4.shape != sslm1.shape:
-            sslm4 = resize(sslm4, sslm1.shape)
-        yield tf.expand_dims(
-            np.concatenate((sslm1,
-                            np.concatenate((sslm2,
-                                            np.concatenate((sslm3, sslm4),
-                                                           axis=-1)), axis=-1)), axis=-1), axis=-1), sslm1.shape
-
-
-def multi_input_generator(gen1, gen2, gen3, gen4, gen5, gen6, feature=2, concat=True, expand_dim_6=True, augment=False):
-    while True:
-        mlsgen = next(gen1)
-        mlsimg = mlsgen[0]
-        if augment:
-            yield [mlsimg, [[0, 0], [0, 0], [0, 0], [0, 0]],
-                   next(gen6)[0]], mlsgen[1][feature]  # tf.expand_dims(next(gen6)[0], axis=0)], mlsgen[1][feature]
-        else:
-            sslmimgs, sslmshape = next(multi_input_generator_helper(gen2, gen3, gen4, gen5, concat))
-            if not expand_dim_6:
-                yield [mlsimg, sslmimgs, next(gen6)[0]], mlsgen[1][feature]
-                continue
-            if mlsimg.shape != sslmshape:
-                mlsimg = resize(mlsimg, sslmshape)
-            yield [mlsimg, sslmimgs, tf.expand_dims(next(gen6)[0], axis=0)], mlsgen[1][feature]
-
-
-def get_column_dataframe():
-    df = pd.DataFrame(columns=['piece_name', 'composer', 'filename', 'duration',
-                               'ssm_log_mel_mean', 'ssm_log_mel_var',
-                               'sslm_chroma_cos_mean', 'sslm_chroma_cos_var',
-                               'sslm_chroma_euc_mean', 'sslm_chroma_euc_var',
-                               'sslm_mfcc_cos_mean', 'sslm_mfcc_cos_var',
-                               'sslm_mfcc_euc_mean', 'sslm_mfcc_euc_var',  # ---{
-                               'chroma_cens_mean', 'chroma_cens_var',
-                               'chroma_cqt_mean', 'chroma_cqt_var',
-                               'chroma_stft_mean', 'chroma_stft_var',
-                               'mel_mean', 'mel_var',
-                               'mfcc_mean', 'mfcc_var',
-                               'spectral_bandwidth_mean', 'spectral_bandwidth_var',
-                               'spectral_centroid_mean', 'spectral_centroid_var',
-                               'spectral_contrast_mean', 'spectral_contrast_var',
-                               'spectral_flatness_mean', 'spectral_flatness_var',
-                               'spectral_rolloff_mean', 'spectral_rolloff_var',
-                               'poly_features_mean', 'poly_features_var',
-                               'tonnetz_mean', 'tonnetz_var',
-                               'zero_crossing_mean', 'zero_crossing_var',
-                               'tempogram_mean', 'tempogram_var',
-                               'fourier_tempo_mean', 'fourier_tempo_var',  # }---
-                               'formtype'])
-    return df
-
-
-def create_form_dataset(filedir=FULL_DIR, labeldir=FULL_LABELPATH, outfile='full_dataset.xlsx', augment=False):
-    # if augment then ignore sslms and replace with [0, 0]
-
-    mls_full = dus.BuildDataloader(os.path.join(filedir, 'MLS/'),
-                                   label_path=labeldir, batch_size=1, reshape=False)
-    midi_full = dus.BuildMIDIloader(os.path.join(filedir, 'MIDI/'),
-                                    label_path=labeldir, batch_size=1, reshape=False, building_df=True)
-    if not augment:
-        sslm_cmcos_full = dus.BuildDataloader(os.path.join(filedir, 'SSLM_CRM_COS/'),
-                                              label_path=labeldir, batch_size=1, reshape=False)
-        sslm_cmeuc_full = dus.BuildDataloader(os.path.join(filedir, 'SSLM_CRM_EUC/'),
-                                              label_path=labeldir, batch_size=1, reshape=False)
-        sslm_mfcos_full = dus.BuildDataloader(os.path.join(filedir, 'SSLM_MFCC_COS/'),
-                                              label_path=labeldir, batch_size=1, reshape=False)
-        sslm_mfeuc_full = dus.BuildDataloader(os.path.join(filedir, 'SSLM_MFCC_EUC/'),
-                                              label_path=labeldir, batch_size=1, reshape=False)
-
-        print("Done building dataloaders, merging...")
-        full_datagen = multi_input_generator(mls_full, sslm_cmcos_full, sslm_cmeuc_full, sslm_mfcos_full,
-                                             sslm_mfeuc_full, midi_full, concat=False, expand_dim_6=False)
-        print("Merging complete. Printing...")
-    else:
-        print("Done building dataloaders, merging...")
-        full_datagen = multi_input_generator(mls_full, None, None, None, None,
-                                             midi_full, concat=False, expand_dim_6=False, augment=True)
-        print("Merging complete. Printing...")
-
-    np.set_string_function(
-        lambda x: repr(x).replace('(', '').replace(')', '').replace('array', '').replace("       ", ' '), repr=False)
-    np.set_printoptions(threshold=inf)
-
-    df = get_column_dataframe()
-    label_encoder = LabelEncoder()
-    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
-    for indx, cur_data in enumerate(full_datagen):
-        if indx == len(mls_full):
-            break
-        c_flname = mls_full.getSong(indx).replace(".wav.npy", "").replace(".wav", "").replace(".npy", "")
-        c_sngdur = mls_full.getDuration(indx)
-        c_slmmls = cur_data[0][0]
-        c_scmcos = cur_data[0][1][0]
-        c_scmeuc = cur_data[0][1][1]
-        c_smfcos = cur_data[0][1][2]
-        c_smfeuc = cur_data[0][1][3]
-        c_midinf = cur_data[0][2]
-        c_flabel = cur_data[1]
-        c_flabel = label_encoder.inverse_transform(np.where(c_flabel == 1)[0])[0]
-
-        df.loc[indx] = ["", "", c_flname, c_sngdur, c_slmmls[0], c_slmmls[1], c_scmcos[0], c_scmcos[1],
-                        c_scmeuc[0], c_scmeuc[1], c_smfcos[0], c_smfcos[1], c_smfeuc[0], c_smfeuc[1],
-                        c_midinf[2], c_midinf[3], c_midinf[4], c_midinf[5], c_midinf[6], c_midinf[7],
-                        c_midinf[8], c_midinf[9], c_midinf[10], c_midinf[11], c_midinf[12], c_midinf[13],
-                        c_midinf[14], c_midinf[15], c_midinf[0], c_midinf[1], c_midinf[16], c_midinf[17],
-                        c_midinf[18], c_midinf[19], c_midinf[20], c_midinf[21], c_midinf[22], c_midinf[23],
-                        c_midinf[24], c_midinf[25], c_midinf[26], c_midinf[27], c_midinf[28], c_midinf[29], c_flabel]
-    for col in df.columns:
-        df[col] = df[col].apply(lambda x: str(x)
-                                .replace(", dtype=float32", "").replace("],", "]")
-                                .replace("dtype=float32", "").replace("...,", ""))
-    # df.to_csv(os.path.join(MASTER_DIR, 'full_dataset.csv'), index=False)
-    df.to_excel(os.path.join(MASTER_DIR, outfile), index=False)
-
-
-def prepare_augmented_audio(inpath=FULL_DIR, savepath='', augmentation=1):
-    if not os.path.exists(savepath):
-        os.makedirs(savepath)
-        print("New directory created:", savepath)
-
-    def inject_noise(adata, noise_factor):
-        noise = np.random.randn(len(adata))
-        augmented_data = adata + noise_factor * noise
-        augmented_data = augmented_data.astype(type(adata[0]))
-        return augmented_data
-
-    def shift_time(adata, sampling_rate, shift_max, shift_direction):
-        shift = np.random.randint(sampling_rate * shift_max)
-        if shift_direction == 'right':
-            shift = -shift
-        elif shift_direction == 'both':
-            direction = np.random.randint(0, 2)
-            if direction == 1:
-                shift = -shift
-        augmented_data = np.roll(adata, shift)
-        # Set to silence for heading/ tailing
-        if shift > 0:
-            augmented_data[:shift] = 0
-        else:
-            augmented_data[shift:] = 0
-        return augmented_data
-
-    def shift_pitch(adata, sampling_rate, pitch_factor):
-        return librosa.effects.pitch_shift(adata, sampling_rate, n_steps=pitch_factor)
-
-    def shift_speed(adata, speed_factor):
-        return librosa.effects.time_stretch(adata, speed_factor)
-
-    start_time = time.time()
-    for (dir_path, dnames, fnames) in os.walk(inpath):
-        for f in fnames:
-            augdatapath = savepath + f.split('.')[0] + '_aug' + str(augmentation) + '.wav'
-            if os.path.exists(augdatapath):
-                continue
-            start_time_song = time.time()
-            fdatapath = dir_path + '/' + f
-            y, sr = librosa.load(fdatapath, sr=None)
-            sr = 44100
-            if augmentation == 1:
-                y = shift_speed(y, 0.7)  # Slower
-                y = shift_pitch(y, sr, -6)  # Shift down 6 half-steps (tritone)
-                y = shift_time(y, sr, random.random(), 'right')
-                y = inject_noise(y, 0.005)
-            elif augmentation == 2:
-                y = shift_speed(y, 1.4)  # Faster
-                y = shift_pitch(y, sr, 4)  # Shift up 4 half-steps (major 3rd)
-                y = shift_time(y, sr, random.random(), 'right')
-                y = inject_noise(y, 0.01)
-            elif augmentation == 3:
-                y = shift_speed(y, 0.5)
-                y = shift_pitch(y, sr, 7)  # Shift up perfect 5th
-                y = shift_time(y, sr, random.random(), 'right')
-                y = inject_noise(y, 0.003)
-            elif augmentation == 4:
-                y = shift_speed(y, 2)
-                y = shift_pitch(y, sr, 8)  # Shift up minor 6th
-                y = shift_time(y, sr, random.random(), 'right')
-                y = inject_noise(y, 0.02)
-            elif augmentation == 5:
-                y = shift_speed(y, 1.1)
-                y = shift_pitch(y, sr, 1)  # Shift up major 7th
-                y = shift_time(y, sr, random.random(), 'right')
-                y = inject_noise(y, 0.007)
-            sf.write(augdatapath, y, sr)
-            print("Successfully saved file:", augdatapath, "\tDuration: {:.2f}s".format(time.time() - start_time_song))
-    print("All files have been converted. Duration: {:.2f}s".format(time.time() - start_time))
-    pass
-
-
-def generate_augmented_datasets():
-    # https://www.kaggle.com/CVxTz/audio-data-augmentation
-    # https://towardsdatascience.com/
-    #   audio-deep-learning-made-simple-part-3-data-preparation-and-augmentation-24c6e1f6b52
-    # https://medium.com/@makcedward/data-augmentation-for-audio-76912b01fdf6
-    for i in range(1, 6):
-        prepare_augmented_audio(savepath=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/MIDI/'), augmentation=i)
-        dus.util_main(feature="mls", inpath=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/'),
-                      midpath=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/'))
-        create_form_dataset(filedir=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/'), augment=True,
-                            outfile='full_dataset_aug' + str(i) + '.xlsx')
-    df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))
-    df1 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug1.xlsx'))
-    df2 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug2.xlsx'))
-    df3 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug3.xlsx'))
-    df4 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug4.xlsx'))
-    df5 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug5.xlsx'))
-    df = pd.concat([df, df1, df2, df3, df4, df5], ignore_index=True).reset_index()
-    df.to_excel(os.path.join(MASTER_DIR, 'full_augmented_dataset.xlsx'), index=False)
-
-
-def prepare_lstm_peaks():
-    MIDI_FILES = os.path.join(MASTER_INPUT_DIR, 'Full/MIDI/')
-    PEAK_DIR = os.path.join(MASTER_INPUT_DIR, 'Full/PEAKS/')
-    cnt = len(os.listdir(PEAK_DIR)) + 1
-    for file in os.listdir(MIDI_FILES):
-        foldername = MIDI_FILES.split('\\')[-1]
-        filename, name = file, file.split('/')[-1].split('.')[0]
-        if str(os.path.basename(name)) + ".npy" in os.listdir(PEAK_DIR):
-            continue
-        print(f"\nWorking on {os.path.basename(name)}, file #" + str(cnt))
-        fullfilename = MIDI_FILES + '/' + filename
-        peaks = du.peak_picking(fullfilename, name, foldername, returnpeaks=True)
-        print(peaks)
-        np.save(os.path.join(PEAK_DIR, os.path.basename(name)), peaks)
-        cnt += 1
-# endregion
-
-
-"""===================================================================================="""
-
-
 # region OldModelDefinition
 # MIDI MODEL -- Try switching activation to ELU instead of RELU. Mimic visual/aural analysis using ensemble method
 def formnn_midi(output_channels=32, numclasses=12):
@@ -1156,7 +855,7 @@ def formnn_cnn_old(input_dim_1, filters=64, lrval=0.0001, numclasses=12):
 # endregion
 
 
-# region FormModel
+# region OldWorkingModelDefinition
 def formnn_cnn(input_dim_1, filters=8, lrval=0.0001, numclasses=12, kernelsize=3, l1reg=0.01, l2reg=0.01, dropout=0.6):
     np.random.seed(9)
     X_input = Input(shape=(input_dim_1, 1))
@@ -1209,7 +908,7 @@ def formnn_cnn(input_dim_1, filters=8, lrval=0.0001, numclasses=12, kernelsize=3
     return model
 
 
-def trainFormModel():
+def oldWorkingtrainFormModel():
     # region DataPreProcessing
     df = pd.read_excel(os.path.join(MASTER_DIR, 'full_augmented_dataset.xlsx'))
     # df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))
@@ -1521,6 +1220,7 @@ def trainFormModel():
     plt.legend()
     """
 
+    """
     # TreeGrad Deep Neural Decision Forest - 83% accuracy
     model = TGDClassifier(num_leaves=31, max_depth=-1, learning_rate=0.1, n_estimators=100,
                           autograd_config={'refit_splits': True})
@@ -1563,8 +1263,9 @@ def trainFormModel():
         model2 = pickle.load(f)
     acc = accuracy_score(int_y_test, model2.predict(X1_test))
     print('TreeGrad Deep Neural Decision Forest accuracy from save: ', acc)
-
     """
+
+    # """
     model = formnn_cnn(X_train.shape[1], filters=32, lrval=0.003, numclasses=len(label_encoder.classes_),
                        kernelsize=10, l1reg=0.000001, l2reg=0.000001, dropout=0.6)
     model.summary()
@@ -1578,7 +1279,7 @@ def trainFormModel():
     history_val_accuracy = []
     num_epochs = 0
 
-    "" "
+    """
     # Try predict
     model.load_weights('best_form_model_50p.hdf5')
     result = model.predict(X_test)
@@ -1593,7 +1294,7 @@ def trainFormModel():
     print(pred_table.to_string(index=False))
     print("Accuracy: " + str(float(percent_correct/len(result))*100) + "%")
     return
-    "" "
+    """
 
     # model.load_weights('best_form_model_44p.hdf5')
     model.load_weights('best_form_new_model40p.hdf5')
@@ -1621,7 +1322,7 @@ def trainFormModel():
     feature_vectors_model = keras.models.Model(model.input, model.get_layer('dense').output)
     X_ext = feature_vectors_model.predict(X_train)
     dtc = tree.DecisionTreeClassifier()
-    "" "
+    """
     # More trees performs worst, rfc0 28%, everything else 12-15%
     rfc0 = RandomForestClassifier(n_estimators=1)
     rfc1 = RandomForestClassifier(n_estimators=10)
@@ -1629,7 +1330,7 @@ def trainFormModel():
     rfc3 = RandomForestClassifier(n_estimators=1000)
     rfc4 = RandomForestClassifier(n_estimators=int(np.sqrt(X_train.shape[1])))
     rfc5 = RandomForestClassifier(n_estimators=int(X_train.shape[1]/2))
-    "" "
+    """
     dtc.fit(X_ext, y_train)
     X_ext = feature_vectors_model.predict(X_test)
     dtc.predict(X_ext)
@@ -1872,6 +1573,520 @@ def old_predictForm():
     print("Accuracy: " + str(float(percent_correct / len(result)) * 100) + "%")
     """
 
+# endregion
+
+
+"""===================================================================================="""
+
+
+# region DataTools
+def generate_label_files():
+    """
+    Generate label '.txt' file for each MIDI in its respective Form-folder.
+    Pre-timestamps each file with silence and end times
+    """
+    cnt = 1
+    for folder in MIDI_Data_Dir:
+        for file in os.listdir(folder):
+            foldername = folder.split('\\')[-1]
+            filename, name = file, file.split('/')[-1].split('.')[0]
+            print(f"\nWorking on {os.path.basename(name)}, file #" + str(cnt))
+
+            path = os.path.join(os.path.join(MASTER_DIR, 'Labels/'), foldername) + '/' + os.path.basename(name) + '.txt'
+            if not os.path.exists(path):
+                with audioread.audio_open(folder + '/' + filename) as f:
+                    print("Reading duration of " + os.path.basename(name))
+                    totalsec = f.duration
+                fwrite = open(path, "w+")
+                fwrite.write("0.000\tSilence\n" + str(totalsec) + '00\tEnd')
+                fwrite.close()
+            cnt += 1
+
+
+def get_total_duration():
+    """
+    Return the sum of all audio file durations together
+    """
+    dur_sum = 0
+    for folder in MIDI_Data_Dir:
+        for file in os.listdir(folder):
+            filename, name = file, file.split('/')[-1].split('.')[0]
+            with audioread.audio_open(folder + '/' + filename) as f:
+                dur_sum += f.duration
+    print("Total duration: " + str(dur_sum) + " seconds")
+    # Total duration: 72869.0 seconds
+    # = 1214.4833 minutes = 20.241389 hours = 20 hours, 14 minutes, 29 seconds
+    return dur_sum
+
+
+def prepare_model_training_input():
+    print("Preparing MLS inputs")
+    dus.util_main(feature="mls")
+
+    print("\nPreparing SSLM-MFCC-COS inputs")
+    dus.util_main(feature="mfcc", mode="cos")
+    print("\nPreparing SSLM-MFCC-EUC inputs")
+    dus.util_main(feature="mfcc", mode="euc")
+
+    print("\nPreparing SSLM-CRM-COS inputs")
+    dus.util_main(feature="chroma", mode="cos")
+    print("\nPreparing SSLM-CRM-EUC inputs")
+    dus.util_main(feature="chroma", mode="euc")
+
+
+def multi_input_generator_helper(gen1, gen2, gen3, gen4, concat=True):
+    while True:
+        sslm1 = next(gen1)[0]
+        sslm2 = next(gen2)[0]
+        sslm3 = next(gen3)[0]
+        sslm4 = next(gen4)[0]
+        if not concat:
+            yield [sslm1, sslm2, sslm3, sslm4], sslm1.shape
+            continue
+
+        if sslm2.shape != sslm1.shape:
+            sslm2 = resize(sslm2, sslm1.shape)
+        if sslm3.shape != sslm1.shape:
+            sslm3 = resize(sslm3, sslm1.shape)
+        if sslm4.shape != sslm1.shape:
+            sslm4 = resize(sslm4, sslm1.shape)
+        yield tf.expand_dims(
+            np.concatenate((sslm1,
+                            np.concatenate((sslm2,
+                                            np.concatenate((sslm3, sslm4),
+                                                           axis=-1)), axis=-1)), axis=-1), axis=-1), sslm1.shape
+
+
+def multi_input_generator(gen1, gen2, gen3, gen4, gen5, gen6, feature=2, concat=True, expand_dim_6=True, augment=False):
+    while True:
+        mlsgen = next(gen1)
+        mlsimg = mlsgen[0]
+        if augment:
+            yield [mlsimg, [[0, 0], [0, 0], [0, 0], [0, 0]],
+                   next(gen6)[0]], mlsgen[1][feature]  # tf.expand_dims(next(gen6)[0], axis=0)], mlsgen[1][feature]
+        else:
+            sslmimgs, sslmshape = next(multi_input_generator_helper(gen2, gen3, gen4, gen5, concat))
+            if not expand_dim_6:
+                yield [mlsimg, sslmimgs, next(gen6)[0]], mlsgen[1][feature]
+                continue
+            if mlsimg.shape != sslmshape:
+                mlsimg = resize(mlsimg, sslmshape)
+            yield [mlsimg, sslmimgs, tf.expand_dims(next(gen6)[0], axis=0)], mlsgen[1][feature]
+
+
+def get_column_dataframe():
+    df = pd.DataFrame(columns=['piece_name', 'composer', 'filename', 'duration',
+                               'ssm_log_mel_mean', 'ssm_log_mel_var',
+                               'sslm_chroma_cos_mean', 'sslm_chroma_cos_var',
+                               'sslm_chroma_euc_mean', 'sslm_chroma_euc_var',
+                               'sslm_mfcc_cos_mean', 'sslm_mfcc_cos_var',
+                               'sslm_mfcc_euc_mean', 'sslm_mfcc_euc_var',  # ---{
+                               'chroma_cens_mean', 'chroma_cens_var',
+                               'chroma_cqt_mean', 'chroma_cqt_var',
+                               'chroma_stft_mean', 'chroma_stft_var',
+                               'mel_mean', 'mel_var',
+                               'mfcc_mean', 'mfcc_var',
+                               'spectral_bandwidth_mean', 'spectral_bandwidth_var',
+                               'spectral_centroid_mean', 'spectral_centroid_var',
+                               'spectral_contrast_mean', 'spectral_contrast_var',
+                               'spectral_flatness_mean', 'spectral_flatness_var',
+                               'spectral_rolloff_mean', 'spectral_rolloff_var',
+                               'poly_features_mean', 'poly_features_var',
+                               'tonnetz_mean', 'tonnetz_var',
+                               'zero_crossing_mean', 'zero_crossing_var',
+                               'tempogram_mean', 'tempogram_var',
+                               'fourier_tempo_mean', 'fourier_tempo_var',  # }---
+                               'formtype'])
+    return df
+
+
+def create_form_dataset(filedir=FULL_DIR, labeldir=FULL_LABELPATH, outfile='full_dataset.xlsx', augment=False):
+    # if augment then ignore sslms and replace with [0, 0]
+
+    mls_full = dus.BuildDataloader(os.path.join(filedir, 'MLS/'),
+                                   label_path=labeldir, batch_size=1, reshape=False)
+    midi_full = dus.BuildMIDIloader(os.path.join(filedir, 'MIDI/'),
+                                    label_path=labeldir, batch_size=1, reshape=False, building_df=True)
+    if not augment:
+        sslm_cmcos_full = dus.BuildDataloader(os.path.join(filedir, 'SSLM_CRM_COS/'),
+                                              label_path=labeldir, batch_size=1, reshape=False)
+        sslm_cmeuc_full = dus.BuildDataloader(os.path.join(filedir, 'SSLM_CRM_EUC/'),
+                                              label_path=labeldir, batch_size=1, reshape=False)
+        sslm_mfcos_full = dus.BuildDataloader(os.path.join(filedir, 'SSLM_MFCC_COS/'),
+                                              label_path=labeldir, batch_size=1, reshape=False)
+        sslm_mfeuc_full = dus.BuildDataloader(os.path.join(filedir, 'SSLM_MFCC_EUC/'),
+                                              label_path=labeldir, batch_size=1, reshape=False)
+
+        print("Done building dataloaders, merging...")
+        full_datagen = multi_input_generator(mls_full, sslm_cmcos_full, sslm_cmeuc_full, sslm_mfcos_full,
+                                             sslm_mfeuc_full, midi_full, concat=False, expand_dim_6=False)
+        print("Merging complete. Printing...")
+    else:
+        print("Done building dataloaders, merging...")
+        full_datagen = multi_input_generator(mls_full, None, None, None, None,
+                                             midi_full, concat=False, expand_dim_6=False, augment=True)
+        print("Merging complete. Printing...")
+
+    np.set_string_function(
+        lambda x: repr(x).replace('(', '').replace(')', '').replace('array', '').replace("       ", ' '), repr=False)
+    np.set_printoptions(threshold=inf)
+
+    df = get_column_dataframe()
+    label_encoder = LabelEncoder()
+    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
+    for indx, cur_data in enumerate(full_datagen):
+        if indx == len(mls_full):
+            break
+        c_flname = mls_full.getSong(indx).replace(".wav.npy", "").replace(".wav", "").replace(".npy", "")
+        c_sngdur = mls_full.getDuration(indx)
+        c_slmmls = cur_data[0][0]
+        c_scmcos = cur_data[0][1][0]
+        c_scmeuc = cur_data[0][1][1]
+        c_smfcos = cur_data[0][1][2]
+        c_smfeuc = cur_data[0][1][3]
+        c_midinf = cur_data[0][2]
+        c_flabel = cur_data[1]
+        c_flabel = label_encoder.inverse_transform(np.where(c_flabel == 1)[0])[0]
+
+        df.loc[indx] = ["", "", c_flname, c_sngdur, c_slmmls[0], c_slmmls[1], c_scmcos[0], c_scmcos[1],
+                        c_scmeuc[0], c_scmeuc[1], c_smfcos[0], c_smfcos[1], c_smfeuc[0], c_smfeuc[1],
+                        c_midinf[2], c_midinf[3], c_midinf[4], c_midinf[5], c_midinf[6], c_midinf[7],
+                        c_midinf[8], c_midinf[9], c_midinf[10], c_midinf[11], c_midinf[12], c_midinf[13],
+                        c_midinf[14], c_midinf[15], c_midinf[0], c_midinf[1], c_midinf[16], c_midinf[17],
+                        c_midinf[18], c_midinf[19], c_midinf[20], c_midinf[21], c_midinf[22], c_midinf[23],
+                        c_midinf[24], c_midinf[25], c_midinf[26], c_midinf[27], c_midinf[28], c_midinf[29], c_flabel]
+    for col in df.columns:
+        df[col] = df[col].apply(lambda x: str(x)
+                                .replace(", dtype=float32", "").replace("],", "]")
+                                .replace("dtype=float32", "").replace("...,", ""))
+    # df.to_csv(os.path.join(MASTER_DIR, 'full_dataset.csv'), index=False)
+    df.to_excel(os.path.join(MASTER_DIR, outfile), index=False)
+
+
+def prepare_augmented_audio(inpath=FULL_DIR, savepath='', augmentation=1):
+    if not os.path.exists(savepath):
+        os.makedirs(savepath)
+        print("New directory created:", savepath)
+
+    def inject_noise(adata, noise_factor):
+        noise = np.random.randn(len(adata))
+        augmented_data = adata + noise_factor * noise
+        augmented_data = augmented_data.astype(type(adata[0]))
+        return augmented_data
+
+    def shift_time(adata, sampling_rate, shift_max, shift_direction):
+        shift = np.random.randint(sampling_rate * shift_max)
+        if shift_direction == 'right':
+            shift = -shift
+        elif shift_direction == 'both':
+            direction = np.random.randint(0, 2)
+            if direction == 1:
+                shift = -shift
+        augmented_data = np.roll(adata, shift)
+        # Set to silence for heading/ tailing
+        if shift > 0:
+            augmented_data[:shift] = 0
+        else:
+            augmented_data[shift:] = 0
+        return augmented_data
+
+    def shift_pitch(adata, sampling_rate, pitch_factor):
+        return librosa.effects.pitch_shift(adata, sampling_rate, n_steps=pitch_factor)
+
+    def shift_speed(adata, speed_factor):
+        return librosa.effects.time_stretch(adata, speed_factor)
+
+    start_time = time.time()
+    for (dir_path, dnames, fnames) in os.walk(inpath):
+        for f in fnames:
+            augdatapath = savepath + f.split('.')[0] + '_aug' + str(augmentation) + '.wav'
+            if os.path.exists(augdatapath):
+                continue
+            start_time_song = time.time()
+            fdatapath = dir_path + '/' + f
+            y, sr = librosa.load(fdatapath, sr=None)
+            sr = 44100
+            if augmentation == 1:
+                y = shift_speed(y, 0.7)  # Slower
+                y = shift_pitch(y, sr, -6)  # Shift down 6 half-steps (tritone)
+                y = shift_time(y, sr, random.random(), 'right')
+                y = inject_noise(y, 0.005)
+            elif augmentation == 2:
+                y = shift_speed(y, 1.4)  # Faster
+                y = shift_pitch(y, sr, 4)  # Shift up 4 half-steps (major 3rd)
+                y = shift_time(y, sr, random.random(), 'right')
+                y = inject_noise(y, 0.01)
+            elif augmentation == 3:
+                y = shift_speed(y, 0.5)
+                y = shift_pitch(y, sr, 7)  # Shift up perfect 5th
+                y = shift_time(y, sr, random.random(), 'right')
+                y = inject_noise(y, 0.003)
+            elif augmentation == 4:
+                y = shift_speed(y, 2)
+                y = shift_pitch(y, sr, 8)  # Shift up minor 6th
+                y = shift_time(y, sr, random.random(), 'right')
+                y = inject_noise(y, 0.02)
+            elif augmentation == 5:
+                y = shift_speed(y, 1.1)
+                y = shift_pitch(y, sr, 1)  # Shift up major 7th
+                y = shift_time(y, sr, random.random(), 'right')
+                y = inject_noise(y, 0.007)
+            sf.write(augdatapath, y, sr)
+            print("Successfully saved file:", augdatapath, "\tDuration: {:.2f}s".format(time.time() - start_time_song))
+    print("All files have been converted. Duration: {:.2f}s".format(time.time() - start_time))
+    pass
+
+
+def generate_augmented_datasets():
+    # https://www.kaggle.com/CVxTz/audio-data-augmentation
+    # https://towardsdatascience.com/
+    #   audio-deep-learning-made-simple-part-3-data-preparation-and-augmentation-24c6e1f6b52
+    # https://medium.com/@makcedward/data-augmentation-for-audio-76912b01fdf6
+    for i in range(1, 6):
+        prepare_augmented_audio(savepath=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/MIDI/'), augmentation=i)
+        dus.util_main(feature="mls", inpath=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/'),
+                      midpath=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/'))
+        create_form_dataset(filedir=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/'), augment=True,
+                            outfile='full_dataset_aug' + str(i) + '.xlsx')
+    df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))
+    df1 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug1.xlsx'))
+    df2 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug2.xlsx'))
+    df3 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug3.xlsx'))
+    df4 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug4.xlsx'))
+    df5 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug5.xlsx'))
+    df = pd.concat([df, df1, df2, df3, df4, df5], ignore_index=True).reset_index()
+    df.to_excel(os.path.join(MASTER_DIR, 'full_augmented_dataset.xlsx'), index=False)
+
+
+def prepare_lstm_peaks():
+    MIDI_FILES = os.path.join(MASTER_INPUT_DIR, 'Full/MIDI/')
+    PEAK_DIR = os.path.join(MASTER_INPUT_DIR, 'Full/PEAKS/')
+    cnt = len(os.listdir(PEAK_DIR)) + 1
+    for file in os.listdir(MIDI_FILES):
+        foldername = MIDI_FILES.split('\\')[-1]
+        filename, name = file, file.split('/')[-1].split('.')[0]
+        if str(os.path.basename(name)) + ".npy" in os.listdir(PEAK_DIR):
+            continue
+        print(f"\nWorking on {os.path.basename(name)}, file #" + str(cnt))
+        fullfilename = MIDI_FILES + '/' + filename
+        peaks = du.peak_picking(fullfilename, name, foldername, returnpeaks=True)
+        print(peaks)
+        np.save(os.path.join(PEAK_DIR, os.path.basename(name)), peaks)
+        cnt += 1
+# endregion
+
+
+# region FormModel
+def trainFormModel():
+    # region DataPreProcessing
+    df = pd.read_excel(os.path.join(MASTER_DIR, 'full_augmented_dataset.xlsx'))
+    # df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))
+    names = df[['piece_name', 'composer', 'filename']]
+    y = df['formtype']
+    # """
+    df = df.drop(columns=['sslm_chroma_cos_mean', 'sslm_chroma_cos_var', 'sslm_chroma_euc_mean', 'sslm_chroma_euc_var',
+                          'sslm_mfcc_cos_mean', 'sslm_mfcc_cos_var', 'sslm_mfcc_euc_mean', 'sslm_mfcc_euc_var'])
+    # """
+    df.drop(columns=['spectral_bandwidth_var', 'spectral_centroid_var', 'spectral_flatness_var', 'spectral_rolloff_var',
+                     'zero_crossing_var', 'fourier_tempo_mean', 'fourier_tempo_var'], inplace=True)  # Remove useless
+    # nonlist = df[['duration', 'spectral_contrast_var']]
+    nonlist = df[['duration']]
+    df.drop(columns=['piece_name', 'composer', 'filename', 'duration', 'spectral_contrast_var', 'formtype'],
+            inplace=True)
+    # df = df[['ssm_log_mel_mean', 'ssm_log_mel_var', 'mel_mean', 'mel_var', 'chroma_stft_mean', 'chroma_stft_var']]
+    # df = df[['ssm_log_mel_mean', 'ssm_log_mel_var']]
+    df = df[['ssm_log_mel_mean']]  # best decision tree accuracy
+    print("Fixing broken array cells as needed...")
+
+    def fix_broken_arr(strx):
+        if '[' in strx:
+            if ']' in strx:
+                return strx
+            else:
+                return strx + ']'
+
+    for col in df.columns:
+        df[col] = df[col].apply(lambda x: fix_broken_arr(x))
+    # print("Headers:", pd.concat([pd.concat([names, pd.concat([nonlist, df], axis=1)], axis=1), y], axis=1).columns)
+    # Headers: Index(['piece_name', 'composer', 'filename', 'duration', 'ssm_log_mel_mean', 'formtype'], dtype='object')
+
+    print("Done processing cells, building training set...")
+
+    # d = [pd.DataFrame(df[col].astype(str).apply(literal_eval).values.tolist()).add_prefix(col) for col in df.columns]
+    d = [pd.DataFrame(df[col].astype(str).apply(literal_eval).values.tolist()) for col in df.columns]
+    df = pd.concat(d, axis=1).fillna(0)
+    df = pd.concat([pd.concat([names, pd.concat([nonlist, df], axis=1)], axis=1), y], axis=1)  # print(df)
+    train, test = train_test_split(df, test_size=0.169, random_state=0, stratify=df['formtype'])  # test_s=.169 gave 50%
+    # df.to_csv(os.path.join(MASTER_DIR, 'full_modified_dataset.csv'))
+
+    X_train = train.iloc[:, 3:-1]
+    X_train_names = train.iloc[:, 0:3]
+    y_train = train.iloc[:, -1]
+    print("Train shape:", X_train.shape)
+    X_test = test.iloc[:, 3:-1]
+    X_test_names = test.iloc[:, 0:3]
+    y_test = test.iloc[:, -1]
+    print("Test shape:", X_test.shape)
+
+    # Normalize Data
+    """
+    min_max_scaler = preprocessing.MinMaxScaler()
+    X_train = min_max_scaler.fit_transform(X_train)  # Good for decision tree
+    X_test = min_max_scaler.fit_transform(X_test)
+    """
+    # X_train = preprocessing.scale(X_train)
+    # X_test = preprocessing.scale(X_test)
+    # """
+    mean = np.mean(X_train, axis=0)
+    std = np.std(X_train, axis=0)
+    X_train = (X_train - mean) / std  # Good for decision tree
+    X_test = (X_test - mean) / std
+    # """
+    print("Normalized Train shape:", X_train.shape)
+    print("Normalized Test shape:", X_test.shape)
+
+    # Convert to arrays for keras
+    X_train = np.array(X_train)
+    y_train = np.array(y_train)
+    X_test = np.array(X_test)
+    y_test = np.array(y_test)
+
+    label_encoder = LabelEncoder()
+    old_y_train = y_train
+    old_y_test = y_test
+    int_y_train = label_encoder.fit_transform(y_train)
+    print(int_y_train.shape)
+    # int_y_train = int_y_train.reshape(len(int_y_train), 1)
+    int_y_test = label_encoder.fit_transform(y_test)
+    # int_y_test = int_y_test.reshape(len(int_y_test), 1)
+    y_train = to_categorical(label_encoder.fit_transform(y_train))
+    y_test = to_categorical(label_encoder.fit_transform(y_test))
+    print(y_train.shape, y_test.shape)
+    print(label_encoder.classes_, "\n")
+
+    """ BASE MODEL """
+    # DummyClassifier makes predictions while ignoring input features
+    dummy_clf = DummyClassifier(strategy="stratified")
+    dummy_clf.fit(X_train, y_train)
+    DummyClassifier(strategy='stratified')
+    dummy_clf.predict(X_test)
+    print("Dummy classifier accuracy:", dummy_clf.score(X_test, y_test))
+
+    clf = tree.DecisionTreeClassifier()
+    clf = clf.fit(X_train, y_train)
+    clf.predict(X_test)
+    print("Decision tree accuracy:", clf.score(X_test, y_test))
+
+    """ FEATURE TUNING """
+    # https://curiousily.com/posts/hackers-guide-to-fixing-underfitting-and-overfitting-models/
+    # https://towardsdatascience.com/handling-overfitting-in-deep-learning-models-c760ee047c6e
+    # https://machinelearningmastery.com/rfe-feature-selection-in-python/
+    selector = SelectKBest(f_classif, k=15)  # 1000 if using RFE
+    Z_train = selector.fit_transform(X_train, old_y_train)
+    skb_values = selector.get_support()
+    Z_test = X_test[:, skb_values]
+    np.save(os.path.join(MASTER_DIR, "selectkbest_indices.npy"), skb_values)
+    print(Z_train.shape)
+    print(Z_test.shape)
+    """
+    plt.title('Feature Importance')
+    plt.ylabel('Score')
+    plt.xlabel('Feature')
+    plt.plot(selector.scores_)
+    plt.savefig('Initial_Feature_Importance.png')
+    plt.show()
+    """
+    print("Indices of top 10 features:", (-selector.scores_).argsort()[:10])
+
+    """ KBEST MODEL """
+    clf = tree.DecisionTreeClassifier()
+    clf = clf.fit(Z_train, y_train)
+    clf.predict(Z_test)
+    # treedepth = clf.tree_.max_depth
+    skb_score = clf.score(Z_test, y_test)
+    print("K-Best Decision tree accuracy:", skb_score)  # Highest score: 84.3% accuracy
+
+    # """
+    # Accuracy 0.211, stick with SKB? Gives good loss though
+    # https://towardsdatascience.com/dont-overfit-how-to-prevent-overfitting-in-your-deep-learning-models-63274e552323
+    clf = LinearSVC(C=0.01, penalty="l1", dual=False)
+    clf.fit(X_train, old_y_train)
+    rfe_selector = RFE(clf, 15, verbose=5)
+    rfe_selector = rfe_selector.fit(Z_train, old_y_train)
+    # rfe_selector = rfe_selector.fit(X_train, old_y_train)
+    rfe_values = rfe_selector.get_support()
+    # np.save(os.path.join(MASTER_DIR, "rfebest_indices.npy"), rfe_values)
+    print("Indices of RFE important features:", np.where(rfe_values)[0])
+    W_train = Z_train[:, rfe_values]
+    W_test = Z_test[:, rfe_values]
+
+    # "" " RFE MODEL " ""
+    clf = tree.DecisionTreeClassifier()
+    clf = clf.fit(W_train, y_train)
+    clf.predict(W_test)
+    rfe_score = clf.score(W_test, y_test)
+    print("RFE Decision tree accuracy:", rfe_score)  # Highest score: 83.7% accuracy, typically better than SKB
+    """
+    plt.figure(figsize=(30, 20))  # set plot size (denoted in inches)
+    tree.plot_tree(clf, fontsize=10)
+    plt.show()
+    plt.savefig('tree_high_dpi', dpi=100)
+    """
+    # """
+    # endregion
+
+    if skb_score > rfe_score:
+        X_train = Z_train
+        X_test = Z_test
+    else:
+        X_train = W_train
+        X_test = W_test
+        # treedepth = clf.tree_.max_depth
+
+    # TreeGrad Deep Neural Decision Forest - 83% accuracy
+    model = TGDClassifier(num_leaves=31, max_depth=-1, learning_rate=0.1, n_estimators=100,
+                          autograd_config={'refit_splits': True})
+    model.fit(X_train, int_y_train)
+    acc = accuracy_score(int_y_test, model.predict(X_test))
+    print('TreeGrad Deep Neural Decision Forest accuracy: ', acc)
+
+    predictions = model.predict(X_test)
+    # predictions = predictions.argmax(axis=1)
+    predictions = predictions.astype(int).flatten()
+    predictions = (label_encoder.inverse_transform(predictions))
+    predictions = pd.DataFrame({'Predicted Values': predictions})
+
+    # actual = y_test.argmax(axis=1)
+    actual = int_y_test.astype(int).flatten()
+    actual = (label_encoder.inverse_transform(actual))
+    actual = pd.DataFrame({'Actual Values': actual})
+
+    cm = confusion_matrix(actual, predictions)
+    plt.figure(figsize=(12, 10))
+    cm = pd.DataFrame(cm, index=[i for i in label_encoder.classes_], columns=[i for i in label_encoder.classes_])
+    ax = sns.heatmap(cm, linecolor='white', cmap='Blues', linewidth=1, annot=True, fmt='')
+    bottom, top = ax.get_ylim()
+    ax.set_ylim(bottom + 0.5, top - 0.5)
+    plt.title('Confusion Matrix', size=20)
+    plt.xlabel('Predicted Labels', size=14)
+    plt.ylabel('Actual Labels', size=14)
+    plt.savefig('TreeGrad_Confusion_Matrix.png')
+    plt.show()
+    clf_report = classification_report(actual, predictions, output_dict=True,
+                                       target_names=[i for i in label_encoder.classes_])
+    sns.heatmap(pd.DataFrame(clf_report).iloc[:, :].T, annot=True, cmap='viridis')
+    plt.title('Classification Report', size=20)
+    plt.savefig('TreeGrad_Classification_Report.png')
+    plt.show()
+
+    with open('treegrad_model_save.pkl', 'wb') as f:
+        pickle.dump(model, f)
+    with open('treegrad_model_save.pkl', 'rb') as f:
+        model2 = pickle.load(f)
+    acc = accuracy_score(int_y_test, model2.predict(X_test))
+    print('TreeGrad Deep Neural Decision Forest accuracy from save: ', acc)
+    pass
+
 
 def preparePredictionData(filepath, savetoexcel=False):
     print("Preparing MLS")
@@ -1977,7 +2192,7 @@ def predictForm():
     label_encoder = LabelEncoder()
     label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
     skb_values = np.load(os.path.join(MASTER_DIR, "selectkbest_indices.npy"))
-    kbest_indices = np.argwhere(skb_values == True)
+    # kbest_indices = np.argwhere(skb_values == True)
     X_test = X_test[:, skb_values]
 
     with open('treegrad_model_save_best.pkl', 'rb') as f:
@@ -2103,10 +2318,10 @@ if __name__ == '__main__':
 
     # generate_augmented_datasets()
     # trainFormModel()
-    predictForm()
+    # predictForm()
 
     # prepare_lstm_peaks()
-    # trainLabelModel()
+    trainLabelModel()
     print("\nDone!")
 
     # Measure confidence level? Prediction Interval (PI)
