@@ -10,12 +10,14 @@ import matplotlib.pyplot as plt
 import librosa.display
 import pyaudio
 import wave
-from IPython.display import Audio
+import pickle
+# from IPython.display import Audio
+import torch
 from matplotlib.pyplot import specgram
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.metrics import confusion_matrix
-import IPython.display as ipd  # To play sound in the notebook
+from sklearn.metrics import confusion_matrix, accuracy_score
+# import IPython.display as ipd  # To play sound in the notebook
 import os  # interface with underlying OS that python is running on
 import soundfile as sf
 import sys
@@ -31,7 +33,7 @@ from tensorflow.keras.layers import Input, Flatten, Dropout, Activation, BatchNo
 from sklearn.model_selection import GridSearchCV
 from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 from tensorflow.keras.optimizers import SGD
-from tensorflow.keras.regularizers import l1, l2
+from tensorflow.keras.regularizers import l1, l2, l1_l2
 import seaborn as sns
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.utils import to_categorical
@@ -80,7 +82,16 @@ from ast import literal_eval
 from sklearn.feature_selection import RFE
 from skimage.transform import resize
 import autokeras as ak
+from djinn import djinn
 from tensorflow.python.ops.init_ops_v2 import glorot_uniform
+# import tensorflow_decision_forests as tfdf  # linux only
+from tensorflow.keras.layers.experimental import RandomFourierFeatures
+from XBNet.training_utils import training, predict
+from XBNet.models import XBNETClassifier
+from XBNet.run import run_XBNET
+from treegrad import TGDClassifier
+# from deep_autoviml import deep_autoviml as deepauto
+
 
 k.set_image_data_format('channels_last')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -94,6 +105,7 @@ if not sys.warnoptions:
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # region Directories
+# MASTER_DIR = '/home/ubuntu/masterthesis/Master Thesis/'
 MASTER_DIR = 'D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis/'
 MASTER_INPUT_DIR = 'F:/Master Thesis Input/'
 MASTER_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/')
@@ -236,6 +248,8 @@ def findBestShape(mls_train, sslm_train):
 
     print(f"Dimension 0:\nMean: {dim1_mean}\t\tMedian: {dim1_median}\t\tMode: {dim1_mode}")
     print(f"Dimension 1:\nMean: {dim2_mean}\t\tMedian: {dim2_median}\t\tMode: {dim2_mode}")
+
+
 # Deprecated WORKING FUSE MODEL
 def old_formnn_fuse(output_channels=32, lrval=0.00001, numclasses=12):
     cnn1_mel = formnn_mls(output_channels, lrval=lrval)
@@ -504,6 +518,7 @@ def combine_generator(gen1, gen2):
 # endregion
 
 
+# region DataTools
 def generate_label_files():
     """
     Generate label '.txt' file for each MIDI in its respective Form-folder.
@@ -797,6 +812,7 @@ def prepare_lstm_peaks():
         print(peaks)
         np.save(os.path.join(PEAK_DIR, os.path.basename(name)), peaks)
         cnt += 1
+# endregion
 
 
 """===================================================================================="""
@@ -1141,49 +1157,50 @@ def formnn_cnn_old(input_dim_1, filters=64, lrval=0.0001, numclasses=12):
 
 
 # region FormModel
-def formnn_cnn(input_dim_1, filters=8, lrval=0.0001, numclasses=12, kernelsize=3):
+def formnn_cnn(input_dim_1, filters=8, lrval=0.0001, numclasses=12, kernelsize=3, l1reg=0.01, l2reg=0.01, dropout=0.6):
     np.random.seed(9)
     X_input = Input(shape=(input_dim_1, 1))
 
     X = layers.Conv1D(filters, kernel_size=kernelsize, strides=1, kernel_initializer=glorot_uniform(seed=9),
-                      bias_regularizer=l2(0.000001), kernel_regularizer=l2(0.00001))(X_input)
+                      bias_regularizer=l1_l2(l1=l1reg, l2=l2reg), kernel_regularizer=l1_l2(l1=l1reg, l2=l2reg))(X_input)
     X = layers.BatchNormalization(axis=2)(X)
     X = layers.Activation('relu')(X)
     X = layers.MaxPooling1D(numclasses, padding='same')(X)
-    X = layers.Dropout(0.5)(X)
+    X = layers.Dropout(dropout)(X)
     # X = layers.GaussianNoise(0.1)(X)
 
     X = layers.Conv1D(filters * 2, kernel_size=kernelsize, strides=1, kernel_initializer=glorot_uniform(seed=9),
-                      bias_regularizer=l2(0.000001), kernel_regularizer=l2(0.00001))(X)
+                      bias_regularizer=l1_l2(l1=l1reg, l2=l2reg), kernel_regularizer=l1_l2(l1=l1reg, l2=l2reg))(X)
     X = layers.BatchNormalization(axis=2)(X)
     X = layers.Activation('relu')(X)
     X = layers.MaxPooling1D(numclasses, padding='same')(X)
-    X = layers.Dropout(0.5)(X)
+    X = layers.Dropout(dropout)(X)
     # X = layers.GaussianNoise(0.1)(X)
 
     X = layers.Conv1D(filters * 4, kernel_size=kernelsize, strides=1, kernel_initializer=glorot_uniform(seed=9),
-                      bias_regularizer=l2(0.000001), kernel_regularizer=l2(0.00001))(X)
+                      bias_regularizer=l1_l2(l1=l1reg, l2=l2reg), kernel_regularizer=l1_l2(l1=l1reg, l2=l2reg))(X)
     X = layers.BatchNormalization(axis=2)(X)
     X = layers.Activation('relu')(X)
     X = layers.MaxPooling1D(numclasses, padding='same')(X)
-    X = layers.Dropout(0.5)(X)
+    X = layers.Dropout(dropout)(X)
     # X = layers.GaussianNoise(0.1)(X)
 
     X = layers.Flatten()(X)
 
     # X = layers.Conv1D(filters * 8, kernel_size=kernelsize, strides=1, kernel_initializer=glorot_uniform(seed=9),
     #                   bias_regularizer=l2(0.5))(X)
-    X = layers.Dense(256, kernel_initializer=glorot_uniform(seed=9), bias_regularizer=l2(0.000001), kernel_regularizer=l2(0.00001))(X)
+    X = layers.Dense(filters * 8, kernel_initializer=glorot_uniform(seed=9),  # 256
+                     bias_regularizer=l1_l2(l1=l1reg, l2=l2reg), kernel_regularizer=l1_l2(l1=l1reg, l2=l2reg))(X)
     X = layers.BatchNormalization(axis=-1)(X)
     X = layers.Activation('relu')(X)
     # X = layers.MaxPooling1D(numclasses, padding='same')(X)
-    X = layers.Dropout(0.5)(X)
+    X = layers.Dropout(dropout)(X)
     # X = layers.GaussianNoise(0.1)(X)
 
     # X = layers.Flatten()(X)
 
     X = layers.Dense(numclasses, activation='sigmoid', kernel_initializer=glorot_uniform(seed=9),
-                     bias_regularizer=l2(0.000001), kernel_regularizer=l2(0.0001))(X)
+                     bias_regularizer=l1_l2(l1=l1reg, l2=l2reg), kernel_regularizer=l1_l2(l1=l1reg, l2=l2reg))(X)
 
     # opt = keras.optimizers.Adam(lr=lrval)
     opt = keras.optimizers.SGD(lr=lrval, decay=1e-6, momentum=0.9, nesterov=True)
@@ -1199,8 +1216,7 @@ def trainFormModel():
     names = df[['piece_name', 'composer', 'filename']]
     y = df['formtype']
     # """
-    # TODO: for augmented dataset
-    df = df.drop(columns=['sslm_chroma_cos_mean', 'sslm_chroma_cos_var', 'sslm_chroma_euc_mean', 'sslm_chroma_euc_var', 
+    df = df.drop(columns=['sslm_chroma_cos_mean', 'sslm_chroma_cos_var', 'sslm_chroma_euc_mean', 'sslm_chroma_euc_var',
                           'sslm_mfcc_cos_mean', 'sslm_mfcc_cos_var', 'sslm_mfcc_euc_mean', 'sslm_mfcc_euc_var'])
     # """
     df.drop(columns=['spectral_bandwidth_var', 'spectral_centroid_var', 'spectral_flatness_var', 'spectral_rolloff_var',
@@ -1211,7 +1227,7 @@ def trainFormModel():
             inplace=True)
     # df = df[['ssm_log_mel_mean', 'ssm_log_mel_var', 'mel_mean', 'mel_var', 'chroma_stft_mean', 'chroma_stft_var']]
     # df = df[['ssm_log_mel_mean', 'ssm_log_mel_var']]
-    # df = df[['ssm_log_mel_mean']]  # best decision tree accuracy
+    df = df[['ssm_log_mel_mean']]  # best decision tree accuracy
     print("Fixing broken array cells as needed...")
 
     def fix_broken_arr(strx):
@@ -1223,6 +1239,9 @@ def trainFormModel():
 
     for col in df.columns:
         df[col] = df[col].apply(lambda x: fix_broken_arr(x))
+    # print("Headers:", pd.concat([pd.concat([names, pd.concat([nonlist, df], axis=1)], axis=1), y], axis=1).columns)
+    # Headers: Index(['piece_name', 'composer', 'filename', 'duration', 'ssm_log_mel_mean', 'formtype'], dtype='object')
+
     print("Done processing cells, building training set...")
 
     # d = [pd.DataFrame(df[col].astype(str).apply(literal_eval).values.tolist()).add_prefix(col) for col in df.columns]
@@ -1247,14 +1266,14 @@ def trainFormModel():
     X_train = min_max_scaler.fit_transform(X_train)  # Good for decision tree
     X_test = min_max_scaler.fit_transform(X_test)
     """
-    X_train = preprocessing.scale(X_train)
-    X_test = preprocessing.scale(X_test)
-    """
+    # X_train = preprocessing.scale(X_train)
+    # X_test = preprocessing.scale(X_test)
+    # """
     mean = np.mean(X_train, axis=0)
     std = np.std(X_train, axis=0)
     X_train = (X_train - mean) / std  # Good for decision tree
     X_test = (X_test - mean) / std
-    """
+    # """
     print("Normalized Train shape:", X_train.shape)
     print("Normalized Test shape:", X_test.shape)
 
@@ -1266,6 +1285,12 @@ def trainFormModel():
 
     label_encoder = LabelEncoder()
     old_y_train = y_train
+    old_y_test = y_test
+    int_y_train = label_encoder.fit_transform(y_train)
+    print(int_y_train.shape)
+    # int_y_train = int_y_train.reshape(len(int_y_train), 1)
+    int_y_test = label_encoder.fit_transform(y_test)
+    # int_y_test = int_y_test.reshape(len(int_y_test), 1)
     y_train = to_categorical(label_encoder.fit_transform(y_train))
     y_test = to_categorical(label_encoder.fit_transform(y_test))
     print(y_train.shape, y_test.shape)
@@ -1288,11 +1313,11 @@ def trainFormModel():
     # https://curiousily.com/posts/hackers-guide-to-fixing-underfitting-and-overfitting-models/
     # https://towardsdatascience.com/handling-overfitting-in-deep-learning-models-c760ee047c6e
     # https://machinelearningmastery.com/rfe-feature-selection-in-python/
-    selector = SelectKBest(f_classif, k=25)  # 1000 if using RFE
+    selector = SelectKBest(f_classif, k=15)  # 1000 if using RFE
     Z_train = selector.fit_transform(X_train, old_y_train)
     skb_values = selector.get_support()
     Z_test = X_test[:, skb_values]
-    # np.save(os.path.join(MASTER_DIR, "selectkbest_indicies.npy"), skb_values)
+    np.save(os.path.join(MASTER_DIR, "selectkbest_indices.npy"), skb_values)
     print(Z_train.shape)
     print(Z_test.shape)
     """
@@ -1309,19 +1334,21 @@ def trainFormModel():
     clf = tree.DecisionTreeClassifier()
     clf = clf.fit(Z_train, y_train)
     clf.predict(Z_test)
-    print("K-Best Decision tree accuracy:", clf.score(Z_test, y_test))
+    treedepth = clf.tree_.max_depth
+    skb_score = clf.score(Z_test, y_test)
+    print("K-Best Decision tree accuracy:", skb_score)  # Highest score: 84.3% accuracy
 
-    """
+    # """
     # Accuracy 0.211, stick with SKB? Gives good loss though
     # https://towardsdatascience.com/dont-overfit-how-to-prevent-overfitting-in-your-deep-learning-models-63274e552323
     clf = LinearSVC(C=0.01, penalty="l1", dual=False)
     clf.fit(X_train, old_y_train)
-    rfe_selector = RFE(clf, 10, verbose=5)
+    rfe_selector = RFE(clf, 15, verbose=5)
     rfe_selector = rfe_selector.fit(Z_train, old_y_train)
     # rfe_selector = rfe_selector.fit(X_train, old_y_train)
     rfe_values = rfe_selector.get_support()
-    # np.save(os.path.join(MASTER_DIR, "rfebest_indicies.npy"), rfe_values)
-    print("Indices of least important features:", np.where(rfe_values)[0])
+    # np.save(os.path.join(MASTER_DIR, "rfebest_indices.npy"), rfe_values)
+    print("Indices of RFE important features:", np.where(rfe_values)[0])
     W_train = Z_train[:, rfe_values]
     W_test = Z_test[:, rfe_values]
 
@@ -1329,24 +1356,40 @@ def trainFormModel():
     clf = tree.DecisionTreeClassifier()
     clf = clf.fit(W_train, y_train)
     clf.predict(W_test)
-    print("RFE Decision tree accuracy:", clf.score(W_test, y_test))
+    rfe_score = clf.score(W_test, y_test)
+    print("RFE Decision tree accuracy:", rfe_score)  # Highest score: 83.7% accuracy, typically better than SKB
     """
+    plt.figure(figsize=(30, 20))  # set plot size (denoted in inches)
+    tree.plot_tree(clf, fontsize=10)
+    plt.show()
+    plt.savefig('tree_high_dpi', dpi=100)
+    """
+    # """
     # endregion
 
     # Reshape to 3D tensor for keras
-    # X_train = Z_train[:, :, np.newaxis]
-    # X_test = Z_test[:, :, np.newaxis]
-    # X_train = W_train[:, :, np.newaxis]
-    # X_test = W_test[:, :, np.newaxis]
+    if skb_score > rfe_score:
+        X_train = Z_train[:, :, np.newaxis]
+        X_test = Z_test[:, :, np.newaxis]
+        X1_train = Z_train
+        X1_test = Z_test
+    else:
+        X_train = W_train[:, :, np.newaxis]
+        X_test = W_test[:, :, np.newaxis]
+        X1_train = W_train
+        X1_test = W_test
+        treedepth = clf.tree_.max_depth
+    # print(treedepth)
     X_train = X_train[:, :, np.newaxis]
     X_test = X_test[:, :, np.newaxis]
 
     """
-    clf = ak.StructuredDataClassifier(overwrite=True, max_trials=3)
-    model_history = clf.fit(Z_train, y_train, epochs=10)
-    predicted_y = clf.predict(Z_test)
+    # Autokeras Model - 32% accuracy
+    clf = ak.StructuredDataClassifier(overwrite=True, max_trials=10)
+    model_history = clf.fit(W_train, y_train, epochs=100)
+    predicted_y = clf.predict(W_test)
     print(predicted_y)
-    print(clf.evaluate(Z_test, y_test))
+    print(clf.evaluate(W_test, y_test))
     model = clf.export_model()
     model.summary()
     # model.save('best_auto_model.h5', save_format='tf')
@@ -1355,7 +1398,175 @@ def trainFormModel():
                    show_shapes=True, show_layer_names=True, expand_nested=True, dpi=300)
     """
 
-    model = formnn_cnn(X_train.shape[1], filters=32, lrval=0.003, numclasses=len(label_encoder.classes_), kernelsize=10)
+    """
+    # Deep CNN Decision Tree - 50% accuracy
+    feature_extractor = Sequential()
+    feature_extractor.add(layers.Conv1D(16, 3, padding='valid', activation='relu', input_shape=(X_train.shape[1], 1),
+                                        strides=1, kernel_regularizer=l1_l2(l1=0.01, l2=0.01)))
+    feature_extractor.add(layers.MaxPooling1D(2))
+    feature_extractor.add(layers.Dropout(0.6))
+    feature_extractor.add(layers.BatchNormalization())
+    feature_extractor.add(layers.Conv1D(32, 3, padding='valid', activation='relu',
+                                        kernel_regularizer=l1_l2(l1=0.01, l2=0.01), strides=1))
+    # New layers for prediction outside of feature extraction model
+    x = feature_extractor.output
+    x = layers.MaxPooling1D(4)(x)
+    x = layers.Dropout(0.6)(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Flatten()(x)
+    prediction_layer = layers.Dense(len(label_encoder.classes_), activation='softmax')(x)
+    # New model combining both layer sets
+    lrval = 0.1
+    # opt = keras.optimizers.Adam(lr=lrval)
+    opt = keras.optimizers.SGD(lr=lrval, decay=1e-6, momentum=0.9, nesterov=True)
+    cnn_model = keras.models.Model(inputs=feature_extractor.input, outputs=prediction_layer)
+    cnn_model.compile(optimizer=opt, loss='categorical_crossentropy')
+    for i in range(10):
+        cnn_model.fit(X_train, y_train, verbose=1)
+        # Predict only the output of the feature extraction model
+        X_ext = feature_extractor.predict(X_train)
+        dtc = tree.DecisionTreeClassifier()  # criterion='entropy'
+        nsamples, nx, ny = X_ext.shape
+        X_ext = X_ext.reshape((nsamples, nx * ny))
+        # Train the decision tree on the extracted features
+        dtc.fit(X_ext, y_train)
+        # Evaluate decision tree
+        X_ext = feature_extractor.predict(X_test)
+        nsamples, nx, ny = X_ext.shape
+        X_ext = X_ext.reshape((nsamples, nx * ny))
+        dtc.predict(X_ext)
+        dtc_score = dtc.score(X_ext, y_test)
+        print("Deep CNN Decision tree accuracy:", dtc_score)
+    # """
+
+    """
+    # Deep SVM-NN - 23% accuracy
+    model = keras.Sequential([
+            keras.Input(shape=(X_train.shape[1],)),
+            RandomFourierFeatures(output_dim=4096, scale=10.0, kernel_initializer="gaussian"),
+            layers.Dense(units=len(label_encoder.classes_)),
+    ])
+    model.compile(
+        optimizer=keras.optimizers.Adam(learning_rate=1e-3),
+        loss=keras.losses.hinge,
+        metrics=[keras.metrics.CategoricalAccuracy(name="acc")],
+    )
+    model.fit(X_train, y_train, epochs=100, batch_size=32, validation_data=(X_test, y_test), verbose=1)
+    """
+
+    """
+    # Deep ANN Decision Tree - 53% accuracy
+    model = Sequential()
+    model.add(layers.Dense(128, activation='relu', input_shape=(X_train.shape[1],)))
+    model.add(layers.Dropout(0.3))
+    model.add(layers.Dense(256, activation='relu'))
+    model.add(layers.Dropout(0.3))
+    model.add(layers.Dense(512, activation='relu'))
+    model.add(layers.Dropout(0.3))
+    model.add(layers.Dense(len(label_encoder.classes_), activation='softmax'))
+    model.compile(optimizer='Adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    # model.fit(X_train, y_train, epochs=100, batch_size=32, validation_data=(X_test, y_test), verbose=1)
+    model.fit(X_train, y_train, epochs=10000)
+    score, acc = model.evaluate(X_test, y_test, verbose=1)  # ~26-35% accuracy
+    feature_vectors_model = keras.models.Model(model.input, model.get_layer('dense_3').output)
+    X_ext = feature_vectors_model.predict(X_train)
+    dtc = tree.DecisionTreeClassifier()
+    dtc.fit(X_ext, y_train)
+    X_ext = feature_vectors_model.predict(X_test)
+    dtc.predict(X_ext)
+    dtc_score = dtc.score(X_ext, y_test)
+    print("Deep ANN Decision tree accuracy:", dtc_score)
+    """
+
+    """
+    # Deep Jointly-Informed Neural Network (DJINN) - 45% accuracy
+    modelname = "class_djinn_test"
+    ntrees = 1  # number of trees = number of neural nets in ensemble
+    maxdepth = 18  # 4 or 20-25; max depth of tree -- optimize this for each data set
+    dropout_keep = 1.0  # dropout typically set to 1 for non-Bayesian models
+    model = djinn.DJINN_Classifier(ntrees, maxdepth, dropout_keep)
+    optimal = model.get_hyperparameters(X1_train, y_train, random_state=1)
+    batchsize = optimal['batch_size']
+    learnrate = optimal['learn_rate']
+    epochs = optimal['epochs']
+    model.train(X1_train, int_y_train, epochs=epochs, learn_rate=learnrate, batch_size=batchsize,
+                display_step=1, save_files=True, file_name=modelname,
+                save_model=True, model_name=modelname, random_state=1)
+    m = model.predict(X1_test)
+    acc = accuracy_score(int_y_test, m.flatten())
+    print('DJINN Accuracy: ', acc)
+    model.close_model()
+    """
+
+    """
+    # XGBoosted Neural Network - 24% accuracy
+    model = XBNETClassifier(X1_train, int_y_train, num_layers=2)
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    m, acc, lo, val_ac, val_lo = run_XBNET(X1_train, X1_test, int_y_train, int_y_test, model,
+                                           criterion, optimizer, batch_size=32, epochs=100)
+    print(predict(m, X1_test))
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 2, 1)
+    plt.plot(acc, label='XBNET Training Accuracy')
+    plt.plot(val_ac, label='XBNET Validation Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.subplot(1, 2, 2)
+    plt.plot(lo, label='XBNET Training Loss')
+    plt.plot(val_lo, label='XBNET Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    """
+
+    # TreeGrad Deep Neural Decision Forest - 83% accuracy
+    model = TGDClassifier(num_leaves=31, max_depth=-1, learning_rate=0.1, n_estimators=100,
+                          autograd_config={'refit_splits': True})
+    model.fit(X1_train, int_y_train)
+    acc = accuracy_score(int_y_test, model.predict(X1_test))
+    print('TreeGrad Deep Neural Decision Forest accuracy: ', acc)
+
+    predictions = model.predict(X1_test)
+    # predictions = predictions.argmax(axis=1)
+    predictions = predictions.astype(int).flatten()
+    predictions = (label_encoder.inverse_transform(predictions))
+    predictions = pd.DataFrame({'Predicted Values': predictions})
+
+    # actual = y_test.argmax(axis=1)
+    actual = int_y_test.astype(int).flatten()
+    actual = (label_encoder.inverse_transform(actual))
+    actual = pd.DataFrame({'Actual Values': actual})
+
+    cm = confusion_matrix(actual, predictions)
+    plt.figure(figsize=(12, 10))
+    cm = pd.DataFrame(cm, index=[i for i in label_encoder.classes_], columns=[i for i in label_encoder.classes_])
+    ax = sns.heatmap(cm, linecolor='white', cmap='Blues', linewidth=1, annot=True, fmt='')
+    bottom, top = ax.get_ylim()
+    ax.set_ylim(bottom + 0.5, top - 0.5)
+    plt.title('Confusion Matrix', size=20)
+    plt.xlabel('Predicted Labels', size=14)
+    plt.ylabel('Actual Labels', size=14)
+    plt.savefig('TreeGrad_Confusion_Matrix.png')
+    plt.show()
+    clf_report = classification_report(actual, predictions, output_dict=True,
+                                       target_names=[i for i in label_encoder.classes_])
+    sns.heatmap(pd.DataFrame(clf_report).iloc[:, :].T, annot=True, cmap='viridis')
+    plt.title('Classification Report', size=20)
+    plt.savefig('TreeGrad_Classification_Report.png')
+    plt.show()
+
+    with open('treegrad_model_save.pkl', 'wb') as f:
+        pickle.dump(model, f)
+    with open('treegrad_model_save.pkl', 'rb') as f:
+        model2 = pickle.load(f)
+    acc = accuracy_score(int_y_test, model2.predict(X1_test))
+    print('TreeGrad Deep Neural Decision Forest accuracy from save: ', acc)
+
+    """
+    model = formnn_cnn(X_train.shape[1], filters=32, lrval=0.003, numclasses=len(label_encoder.classes_),
+                       kernelsize=10, l1reg=0.000001, l2reg=0.000001, dropout=0.6)
     model.summary()
     if not os.path.isfile(os.path.join(MASTER_DIR, 'FormNN_CNN_Model_Diagram.png')):
         plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_CNN_Model_Diagram.png'),
@@ -1367,7 +1578,7 @@ def trainFormModel():
     history_val_accuracy = []
     num_epochs = 0
 
-    """
+    "" "
     # Try predict
     model.load_weights('best_form_model_50p.hdf5')
     result = model.predict(X_test)
@@ -1382,11 +1593,12 @@ def trainFormModel():
     print(pred_table.to_string(index=False))
     print("Accuracy: " + str(float(percent_correct/len(result))*100) + "%")
     return
-    """
+    "" "
 
     # model.load_weights('best_form_model_44p.hdf5')
+    model.load_weights('best_form_new_model40p.hdf5')
     # while True:
-    for i in range(0, 1500):
+    for i in range(0, 3000):
         # early_stopping = EarlyStopping(monitor='val_loss', patience=5, verbose=5, mode="auto")
         checkpoint = ModelCheckpoint("best_form_new_model.hdf5", monitor='val_accuracy', verbose=0,
                                      save_best_only=False, mode='max', save_freq='epoch', save_weights_only=True)
@@ -1405,6 +1617,24 @@ def trainFormModel():
     score = model.evaluate(X_test, y_test, verbose=1)
     print("Evaluation complete!\n__________Score__________")
     print(f"Loss: {score[0]}\tAccuracy: {score[1]}")
+
+    feature_vectors_model = keras.models.Model(model.input, model.get_layer('dense').output)
+    X_ext = feature_vectors_model.predict(X_train)
+    dtc = tree.DecisionTreeClassifier()
+    "" "
+    # More trees performs worst, rfc0 28%, everything else 12-15%
+    rfc0 = RandomForestClassifier(n_estimators=1)
+    rfc1 = RandomForestClassifier(n_estimators=10)
+    rfc2 = RandomForestClassifier(n_estimators=100)
+    rfc3 = RandomForestClassifier(n_estimators=1000)
+    rfc4 = RandomForestClassifier(n_estimators=int(np.sqrt(X_train.shape[1])))
+    rfc5 = RandomForestClassifier(n_estimators=int(X_train.shape[1]/2))
+    "" "
+    dtc.fit(X_ext, y_train)
+    X_ext = feature_vectors_model.predict(X_test)
+    dtc.predict(X_ext)
+    dtc_score = dtc.score(X_ext, y_test)
+    print("Deep CNN Decision Tree 2 accuracy:", dtc_score)  # ^ 26%, 29%
 
     # if score[1] >= 0.51:
     # region EvaluationGraphs
@@ -1463,10 +1693,11 @@ def trainFormModel():
     #     num_epochs = 0
     #     continue
     # endregion
+    # """
     pass
 
 
-def preparePredictionData(filepath, savetoexcel=False):
+def old_preparePredictionData(filepath, savetoexcel=False):
     print("Preparing MLS")
     mls = dus.util_main_helper(feature="mls", filepath=filepath, predict=True)
     print("Preparing SSLM-MFCC-COS")
@@ -1530,7 +1761,7 @@ def preparePredictionData(filepath, savetoexcel=False):
     return df
 
 
-def predictForm():
+def old_predictForm():
     midpath = input("Enter path to folder or audio file: ")
     df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))  # 15,330
     df = pd.DataFrame(df.loc[[0, 153]]).reset_index()
@@ -1540,7 +1771,7 @@ def predictForm():
     else:
         if os.path.isfile(midpath):
             # df2 = pd.read_excel(os.path.join(MASTER_DIR, 'brahms_opus117_1.xlsx'))
-            df2 = preparePredictionData(midpath, savetoexcel=False)
+            df2 = old_preparePredictionData(midpath, savetoexcel=False)
         elif os.path.isdir(midpath):
             if midpath[-1] != "\\" or midpath[-1] != "/":
                 if "\\" in midpath:
@@ -1557,7 +1788,7 @@ def predictForm():
                     if f.endswith(tuple(audio_extenions)):
                         print("Reading file #" + str(cnt + 1))
                         mid_path = mid_dirpath + f
-                        df2t = preparePredictionData(mid_path, savetoexcel=False)
+                        df2t = old_preparePredictionData(mid_path, savetoexcel=False)
                         df2 = pd.concat([df2, df2t], ignore_index=True).reset_index(drop=True)
                         cnt += 1
         else:
@@ -1640,6 +1871,125 @@ def predictForm():
     print(pred_table.to_string(index=False))
     print("Accuracy: " + str(float(percent_correct / len(result)) * 100) + "%")
     """
+
+
+def preparePredictionData(filepath, savetoexcel=False):
+    print("Preparing MLS")
+    mls = dus.util_main_helper(feature="mls", filepath=filepath, predict=True)
+
+    sngdur = 0
+    with audioread.audio_open(filepath) as f:
+        sngdur += f.duration
+
+    np.set_string_function(
+        lambda x: repr(x).replace('(', '').replace(')', '').replace('array', '').replace("       ", ' '), repr=False)
+    np.set_printoptions(threshold=inf)
+
+    print("Building feature table")
+    df = pd.DataFrame(columns=['piece_name', 'composer', 'filename', 'duration', 'ssm_log_mel_mean', 'formtype'])
+    c_flname = os.path.basename(filepath.split('/')[-1].split('.')[0])
+
+    df.loc[0] = ["TBD", "TBD", c_flname, sngdur, mls[0], "TBD"]
+    for col in df.columns:
+        df[col] = df[col].apply(lambda x: str(x)
+                                .replace(", dtype=float32", "").replace("],", "]")
+                                .replace("dtype=float32", "").replace("...,", ""))
+    if savetoexcel:
+        df.to_excel(os.path.join(MASTER_DIR, c_flname + '.xlsx'), index=False)
+    return df
+
+
+def predictForm():
+    midpath = input("Enter path to folder or audio file: ")
+    df = pd.DataFrame()
+    if not os.path.exists(midpath):
+        raise FileNotFoundError("Path not found or does not exist.")
+    else:
+        if os.path.isfile(midpath):
+            # df2 = pd.read_excel(os.path.join(MASTER_DIR, 'brahms_opus117_1.xlsx'))
+            df = preparePredictionData(midpath, savetoexcel=False)
+        elif os.path.isdir(midpath):
+            if midpath[-1] != "\\" or midpath[-1] != "/":
+                if "\\" in midpath:
+                    midpath = midpath + "\\"
+                else:
+                    midpath = midpath + "/"
+            cnt = 0
+            audio_extenions = ["3gp", "aa", "aac", "aax", "act", "aiff", "alac", "amr", "ape", "au", "awb", "dct",
+                               "dss", "dvf", "flac", "gsm", "iklax", "ivs", "m4a", "m4b", "m4p", "mmf", "mp3", "mpc",
+                               "msv", "nmf", "ogg", "oga", "mogg", "opus", "ra", "rm", "raw", "rf64", "sln", "tta",
+                               "voc", "vox", "wav", "wma", "wv", "webm", "8svx", "cda", "mid", "midi", "mp4"]
+            for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(midpath):
+                for f in mid_filenames:
+                    if f.endswith(tuple(audio_extenions)):
+                        print("Reading file #" + str(cnt + 1))
+                        mid_path = mid_dirpath + f
+                        dft = preparePredictionData(mid_path, savetoexcel=False)
+                        df = pd.concat([df, dft], ignore_index=True).reset_index(drop=True)
+                        cnt += 1
+        else:
+            raise FileNotFoundError("Path resulted in error.")
+
+    names = df[['piece_name', 'composer', 'filename']]
+    y = df['formtype']
+    nonlist = df[['duration']]
+    df.drop(columns=['piece_name', 'composer', 'filename', 'duration', 'formtype'], inplace=True)
+    df = df[['ssm_log_mel_mean']]
+    print("Fixing broken array cells as needed...")
+
+    def fix_broken_arr(strx):
+        if '[' in strx:
+            if ']' in strx:
+                return strx
+            else:
+                return strx + ']'
+
+    for col in df.columns:
+        df[col] = df[col].apply(lambda x: fix_broken_arr(x))
+    print("Done processing cells, building data set...")
+
+    d = [pd.DataFrame(df[col].astype(str).apply(literal_eval).values.tolist()) for col in df.columns]
+    df = pd.concat(d, axis=1).fillna(0)
+    df = pd.concat([pd.concat([names, pd.concat([nonlist, df], axis=1)], axis=1), y], axis=1)
+    df['duration'] = df['duration'].apply(lambda x: float(x))
+
+    X_test = df.iloc[:, 3:-1]  # Match 2687 from training data
+    if X_test.shape[1] <= 2687:
+        t_cnt = 0
+        while X_test.shape[1] < 2687:
+            X_test = X_test.join(pd.DataFrame(columns=['filler' + str(t_cnt)]), how='outer')
+            t_cnt += 1
+    else:
+        X_test = X_test.iloc[:, :2687]
+    X_test = X_test.fillna(0)
+    # print(X_test.shape)
+    X_test_names = df.iloc[:, 0:3]
+    # y_test = df.iloc[:, -1]
+
+    # Normalize Data
+    mean = np.mean(X_test, axis=0)
+    std = np.std(X_test, axis=0)
+    X_test = (X_test - mean) / std
+    # print("Normalized Test shape:", X_test.shape)
+    X_test = np.array(X_test)
+    X_test_names = np.array(X_test_names)
+
+    label_encoder = LabelEncoder()
+    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
+    skb_values = np.load(os.path.join(MASTER_DIR, "selectkbest_indices.npy"))
+    kbest_indices = np.argwhere(skb_values == True)
+    X_test = X_test[:, skb_values]
+
+    with open('treegrad_model_save_best.pkl', 'rb') as f:
+        model = pickle.load(f)
+    result = model.predict(X_test)
+
+    for i in range(X_test.shape[0]):
+        print("Performing predictions on", X_test_names[i])
+        resultlbl = label_encoder.inverse_transform([result[i]])
+        print("\t\tPredicted form:", resultlbl)
+
+
 # endregion
 
 
@@ -1751,10 +2101,9 @@ if __name__ == '__main__':
     # buildValidationSet()
     # create_form_dataset()
 
-    # TODO: try to get 60-70% val_acc. Try data augmentation
     # generate_augmented_datasets()
-    trainFormModel()
-    # predictForm()
+    # trainFormModel()
+    predictForm()
 
     # prepare_lstm_peaks()
     # trainLabelModel()
@@ -1768,4 +2117,3 @@ if __name__ == '__main__':
     # Publish in Society for Music Theorists? SMT - Due mid-Feb., conference in Nov.
     # https://towardsdatascience.com/10-minutes-to-building-a-cnn-binary-image-classifier-in-tensorflow-4e216b2034aa
     # Use novelty function for each song, save array of predicted peaks using np.save and load
-    # Include duration as a feature!!!
