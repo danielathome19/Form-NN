@@ -116,6 +116,9 @@ FULL_LABELPATH = os.path.join(MASTER_LABELPATH, 'Full/')
 # endregion
 
 
+"""===================================================================================="""
+
+
 # region DEPRECATED
 # Deprecated
 Train_Data_Dir = np.array(gb.glob(os.path.join(MASTER_INPUT_DIR, 'Train/*')))  # os.path.join(MASTER_DIR, 'Data/Train/*'
@@ -2223,6 +2226,9 @@ def predictForm():
 # endregion
 
 
+"""===================================================================================="""
+
+
 # region LabelModel
 def formnn_lstm(n_timesteps, mode='concat'):  # Try 'ave', 'mul', and 'sum' also
     model = Sequential()
@@ -2283,7 +2289,18 @@ def trainLabelModel_helper(model, n_timesteps, num_epochs=250):
 
 
 def trainLabelModel():
-    # TODO: Model should take in timestamp array (X) and labels (y) for training, eval only provide novelty timestamps
+    """
+    TODO: RNN Model should take in timestamp array (X) and labels (y) for training, eval only provide novelty timestamps
+    Seq-2-Seq model:
+    - Convert audio into log-mel spectrogram
+    - Break audio into segments between timestamps (mel arrays)
+    - Pass RNN two inputs: {[timestamp1_audio], [timestamp2_audio], ...}, [timestamp1, timestamp2]
+    - Classify using simple labels only? A, B, a, b, c instead of A A' B, a, a', a'', Expos, PT, ST, etc.
+        o Have to parse labels specifically for training because of this
+    - If necessary, only label phrases, then phrases and parts together
+    - Return label(s) for each timestamp
+    - Dataset very small -- skip out on validation data for now?
+    """
 
     n_timesteps = 10
     model = formnn_lstm(n_timesteps, mode='concat')
