@@ -371,6 +371,60 @@ def create_mls_sslm(filename, name="", foldername="", filepath=DEFAULT_FILEPATH)
 # endregion
 
 
+class SplitAudio:
+    def __init__(self, folder, filename, setmono=True):
+        self.folder = folder
+        self.filename = filename
+        # self.filepath = folder + '\\' + filename
+        self.audio = AudioSegment.from_file(self.filename)
+        if setmono:
+            self.audio = self.audio.set_channels(1)
+
+    def get_duration(self):
+        return self.audio.duration_seconds
+
+    def get_samplerate(self):
+        return self.audio.frame_rate
+
+    def single_split(self, from_sec, to_sec, split_filename="", export=True):
+        t1 = from_sec * 1000
+        t2 = to_sec * 1000
+        split_audio = self.audio[t1:t2]
+        if export:
+            split_audio.export(self.folder + '/' + split_filename[split_filename.index("/")+1:], format="wav")
+        else:
+            return split_audio
+
+    def multiple_split(self, sec_per_split, verbose=True):
+        total_sec = math.ceil(self.get_duration())
+        for i in range(0, total_sec, sec_per_split):
+            split_fn = self.filename[:self.filename.index('.')] + '_' + str(i) + '.wav'
+            self.single_split(i, i + sec_per_split, split_fn)
+            if verbose:
+                print(str(i) + " Done")
+                if i == total_sec - sec_per_split:
+                    print("All splits completed successfully")
+                else:
+                    print("Error during audio splitting")
+
+
+def audiosegment_to_ndarray(audiosegment, getSR=False):
+    samples = audiosegment.get_array_of_samples()
+    samples_float = librosa.util.buf_to_float(samples, n_bytes=2,
+                                              dtype=np.float32)
+    if audiosegment.channels == 2:
+        sample_left = np.copy(samples_float[::2])
+        sample_right = np.copy(samples_float[1::2])
+        sample_all = np.array([sample_left, sample_right])
+    else:
+        sample_all = samples_float
+
+    if getSR:
+        return [sample_all, audiosegment.frame_rate]
+    else:
+        return sample_all
+
+
 # Novelty Function
 def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, returnpeaks=True):
     # ------------PARAMETERS--------------
@@ -702,6 +756,7 @@ def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, re
     print("\nAverage (absolute) time difference: ±" + str(np.average(timeDifs)))
 
 
+# region ReadFiles
 def ReadNumbersFromLine(line):
     number = re.split(r'\s\s*', line)[0]
     number = float(number)
@@ -741,10 +796,12 @@ def ReadDataFromtxt(directory, archive):
     return numbers, np.asarray(labels).astype(object), form
 
 
-def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1, valid_only=False):
+def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1, valid_only=False,
+                                      get_names=False, get_forms=False):
     nums = []
     lbls = []
     forms = []
+    fnames = []
     for (lbl_dir_path, lbl_dnames, lbl_fnames) in os.walk(lblpath):
         for f in lbl_fnames:
             if valid_only:
@@ -762,6 +819,7 @@ def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1, valid_
             nums.append(numsIn)
             lbls.append(lblsIn)
             forms.append([formsIn])
+            fnames.append(f)
 
     # Convert Forms to One Hot encoding
     values = np.array(forms)  # print(values)
@@ -786,6 +844,10 @@ def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1, valid_
     onehot_labels = onehot_encoder.fit_transform(integer_encoded)  # print(onehot_encoded)
     # inverted = label_encoder.inverse_transform([argmax(onehot_encoded[0, :])])  # Return original label from encoding
     """
+    if get_names:
+        if get_forms:
+            return nums, np.asarray(lbls), integer_encoded, np.asarray(fnames)
+        return nums, np.asarray(lbls), tf.expand_dims(onehot_encoded, axis=-1), np.asarray(fnames)
     return nums, np.asarray(lbls), tf.expand_dims(onehot_encoded, axis=-1)
 
 
@@ -799,3 +861,6 @@ def prepend_line(file_name, line):
     os.remove(file_name)
     os.rename(dummy_file, file_name)
     print("Finished prepending to " + file_name)
+
+
+# endregion

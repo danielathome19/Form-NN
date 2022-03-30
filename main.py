@@ -1,5 +1,6 @@
 import datetime
 import glob
+import itertools
 import math
 import re
 import time
@@ -16,7 +17,7 @@ import torch
 from matplotlib.pyplot import specgram
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.metrics import confusion_matrix, accuracy_score
+from sklearn.metrics import confusion_matrix, accuracy_score, multilabel_confusion_matrix
 import os
 import soundfile as sf
 import sys
@@ -90,6 +91,7 @@ from XBNet.models import XBNETClassifier
 from XBNet.run import run_XBNET
 import lightgbm as lgb
 from treegrad import TGDClassifier
+from sklearn.preprocessing import MultiLabelBinarizer
 
 
 k.set_image_data_format('channels_last')
@@ -105,13 +107,13 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 # region Directories
-# MASTER_DIR = '/home/ubuntu/masterthesis/Master Thesis/'
 MASTER_DIR = 'D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis/'
 MASTER_INPUT_DIR = 'F:/Master Thesis Input/'
 MASTER_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/')
 
 MIDI_Data_Dir = np.array(gb.glob(os.path.join(MASTER_DIR, 'Data/MIDIs/*')))
 FULL_DIR = os.path.join(MASTER_INPUT_DIR, 'Full/')
+FULL_MIDI_DIR = os.path.join(FULL_DIR, 'MIDI/')
 FULL_LABELPATH = os.path.join(MASTER_LABELPATH, 'Full/')
 # endregion
 
@@ -1178,7 +1180,7 @@ def oldWorkingtrainFormModel():
     X_ext = feature_vectors_model.predict(X_test)
     dtc.predict(X_ext)
     dtc_score = dtc.score(X_ext, y_test)
-    print("Deep ANN Decision tree accuracy:", dtc_score)
+    print("Deep ANN Decision Tree accuracy:", dtc_score)
     """
 
     """
@@ -1577,6 +1579,103 @@ def old_predictForm():
     print("Accuracy: " + str(float(percent_correct / len(result)) * 100) + "%")
     """
 
+# endregion
+
+
+# region TestLabelModel
+def formnn_lstm(n_timesteps, mode='concat', num_classes=1):  # Try 'ave', 'mul', and 'sum' also
+    model = Sequential()
+    model.add(layers.Bidirectional(
+        layers.LSTM(32, return_sequences=True), input_shape=(None, 1), merge_mode=mode))
+    model.add(layers.TimeDistributed(
+        layers.Dense(num_classes, activation='sigmoid')))
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    # print(model.metrics_names)
+    return model
+
+
+def get_sequence(n_timesteps):
+    # create a sequence of random numbers in [0,1]
+    X = np.array([random.random() for _ in range(n_timesteps)])
+    # calculate cut-off value to change class values
+    limit = n_timesteps/4.0
+    # determine the class outcome for each item in cumulative sequence
+    y = np.array([0 if x < limit else 1 for x in np.cumsum(X)])
+    # reshape input and output data to be suitable for LSTMs
+    # print(X) [0.436576 0.35750063 0.41489899 0.19143477 0.01814592 0.89638702 0.01744344 0.63694126 0.614542 0.623846]
+    # print(y) [0 0 0 0 0 0 0 1 1 1]
+    X = X.reshape(1, n_timesteps, 1)  # from (10,) to (1, 10, 1)
+    y = y.reshape(1, n_timesteps, 1)
+    return X, y
+
+
+def test_trainLabelModel_helper(model, n_timesteps, num_epochs=250):
+    # early_stopping = EarlyStopping(patience=5, verbose=5, mode="auto")  # Does not work without validation set
+    # checkpoint = ModelCheckpoint(os.path.join(MASTER_DIR, 'best_formNN_label_model.hdf5'), monitor='val_accuracy',
+    #                            verbose=0, save_best_only=False, mode='max', save_freq='epoch', save_weights_only=True)
+    history_loss = []
+    # history_val_loss = []
+    history_accuracy = []
+    # history_val_accuracy = []
+    tr_set = pd.DataFrame(du.ReadLabelSecondsPhrasesFromFolder(FULL_LABELPATH, valid_only=True)[0:2]).transpose()
+    tr_set = np.array(tr_set)
+    # print(tr_set)
+    # for i in range(num_epochs):
+    for i in range(tr_set.shape[0]):
+        Xt = tr_set[i][0]
+        yt = tr_set[i][1]
+        Xt = Xt.reshape(1, len(Xt), 1)
+        yt = yt.reshape(1, len(yt), 1)
+        # print(Xt)
+        # print(yt)
+        # X, y = get_sequence(n_timesteps)  # generate new random sequence
+        X, y = get_sequence(tr_set.shape[0])  # generate new random sequence
+        # print(X, y)
+        model_history = model.fit(X, y, epochs=1, batch_size=1, verbose=1)  # , callbacks=[checkpoint])
+        history_loss.append(model_history.history['loss'])
+        # history_val_loss.append(model_history.history['val_loss'])
+        history_accuracy.append(model_history.history['acc'])
+        # history_val_accuracy.append(model_history.history['val_accuracy'])
+        print("Epochs completed:", i)
+    # return [history_loss, history_val_loss, history_accuracy, history_val_accuracy]
+    return [history_loss, history_accuracy]
+
+
+def test_trainLabelModel():
+    n_timesteps = 10
+    model = formnn_lstm(n_timesteps, mode='concat')
+    model_history = test_trainLabelModel_helper(model, n_timesteps, num_epochs=250)
+    plt.plot(model_history[0])  # plt.plot(model_history.history['loss'])
+    # plt.plot(model_history[1])  # plt.plot(model_history.history['val_loss'])
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['train', 'test'], loc='upper left')
+    plt.savefig('Initial_LabelModel_Loss.png')
+    plt.show()
+
+    plt.plot(model_history[1])  # plt.plot(model_history.history['accuracy'])
+    # plt.plot(model_history[3])  # plt.plot(model_history.history['val_accuracy'])
+    plt.title('Model Accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Test'], loc='upper left')
+    plt.savefig('Initial_LabelModel_Accuracy.png')
+    plt.show()
+
+    print("Evaluating...")
+    X, y = get_sequence(n_timesteps)
+    score = model.evaluate(X, y)
+    print("Evaluation complete!\nScore:")
+    print(f"Loss: {score[0]}\tAccuracy: {score[1]}")
+
+    print("Predicting...")
+    X, y = get_sequence(n_timesteps)
+    yhat = model.predict(X, verbose=1)
+    print("Prediction complete!")
+    for i in range(n_timesteps):
+        print('Expected:', y[0, i], 'Predicted', yhat[0, i])
+    pass
 # endregion
 
 
@@ -2212,15 +2311,10 @@ def predictForm():
         model = pickle.load(f)
     result = model.predict(X_test)
 
-    plt.figure(figsize=(30, 20))  # set plot size (denoted in inches)
-    tree.plot_tree(model.base_model_, fontsize=10)
-    plt.show()
-    plt.savefig('treegrad_high_dpi', dpi=100)
-
     for i in range(X_test.shape[0]):
-        print("Performing predictions on", X_test_names[i])
+        print("Performing predictions on", X_test_names[i][2])
         resultlbl = label_encoder.inverse_transform([result[i]])
-        print("\t\tPredicted form:", resultlbl)
+        print("\t\tPredicted form:", resultlbl[0])
 
 
 # endregion
@@ -2230,68 +2324,140 @@ def predictForm():
 
 
 # region LabelModel
-def formnn_lstm(n_timesteps, mode='concat'):  # Try 'ave', 'mul', and 'sum' also
-    model = Sequential()
-    model.add(layers.Bidirectional(
-        layers.LSTM(20, return_sequences=True), input_shape=(None, 1), merge_mode=mode))
-    model.add(layers.TimeDistributed(
-        layers.Dense(1, activation='sigmoid')))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-    # print(model.metrics_names)
-    return model
+def get_split_spectrograms(valid_only=True):
+    tr_in = du.ReadLabelSecondsPhrasesFromFolder(FULL_LABELPATH, valid_only=valid_only, get_names=True)
+    tr_xy = tr_in[0:2]
+    tr_names = tr_in[3]
+    tr_set = np.array(pd.DataFrame(tr_xy).transpose())
+    all_spectrograms = []
+    all_durations = []
 
+    def find(name, path):
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                if name in file:
+                    return os.path.join(root, file)
 
-def get_sequence(n_timesteps):
-    # create a sequence of random numbers in [0,1]
-    X = np.array([random.random() for _ in range(n_timesteps)])
-    # calculate cut-off value to change class values
-    limit = n_timesteps/4.0
-    # determine the class outcome for each item in cumulative sequence
-    y = np.array([0 if x < limit else 1 for x in np.cumsum(X)])
-    # reshape input and output data to be suitable for LSTMs
-    # print(X) [0.436576 0.35750063 0.41489899 0.19143477 0.01814592 0.89638702 0.01744344 0.63694126 0.614542 0.623846]
-    # print(y) [0 0 0 0 0 0 0 1 1 1]
-    X = X.reshape(1, n_timesteps, 1)  # from (10,) to (1, 10, 1)
-    y = y.reshape(1, n_timesteps, 1)
-    return X, y
-
-
-def trainLabelModel_helper(model, n_timesteps, num_epochs=250):
-    # early_stopping = EarlyStopping(patience=5, verbose=5, mode="auto")  # Does not work without validation set
-    # checkpoint = ModelCheckpoint(os.path.join(MASTER_DIR, 'best_formNN_label_model.hdf5'), monitor='val_accuracy',
-    #                            verbose=0, save_best_only=False, mode='max', save_freq='epoch', save_weights_only=True)
-    history_loss = []
-    # history_val_loss = []
-    history_accuracy = []
-    # history_val_accuracy = []
-    tr_set = pd.DataFrame(du.ReadLabelSecondsPhrasesFromFolder(FULL_LABELPATH, valid_only=True)[0:2]).transpose()
-    tr_set = np.array(tr_set)
-    # print(tr_set)
-    # for i in range(num_epochs):
     for i in range(tr_set.shape[0]):
-        Xt = tr_set[i][0]
-        yt = tr_set[i][1]
-        Xt = Xt.reshape(1, len(Xt), 1)
-        yt = yt.reshape(1, len(yt), 1)
-        # print(Xt)
-        # print(yt)
-        # X, y = get_sequence(n_timesteps)  # generate new random sequence
-        X, y = get_sequence(tr_set.shape[0])  # generate new random sequence
-        # print(X, y)
-        model_history = model.fit(X, y, epochs=1, batch_size=1, verbose=1)  # , callbacks=[checkpoint])
-        history_loss.append(model_history.history['loss'])
-        # history_val_loss.append(model_history.history['val_loss'])
-        history_accuracy.append(model_history.history['acc'])
-        # history_val_accuracy.append(model_history.history['val_accuracy'])
-        print("Epochs completed:", i)
-    # return [history_loss, history_val_loss, history_accuracy, history_val_accuracy]
-    return [history_loss, history_accuracy]
+        Xt = tr_set[i][0]  # Timestamps
+        # yt = tr_set[i][1]  # Labels
+        fname = find(tr_names[i][0:-4], FULL_MIDI_DIR)
+        print("Reading file: " + fname)
+        audio_splits = []
+        durations = []
+        splity = du.SplitAudio("", fname)
+        sr = splity.get_samplerate()
+        for idx, timestamp in enumerate(Xt):
+            if idx != len(Xt) - 1:
+                asplit = splity.single_split(Xt[idx], Xt[idx + 1], export=False)
+                asplit = du.audiosegment_to_ndarray(asplit)
+                if len(asplit) == 0:
+                    print("i1 =", Xt[idx], "\ti2 =", Xt[idx + 1])
+                    print("Ndarr:", len(asplit))
+                    print("Duration:", splity.get_duration(), "\tExpected:", Xt[-1])
+                audio_splits.append(asplit)
+                durations.append(abs(float(Xt[idx + 1] - Xt[idx])))
+        spectrograms = []
+        for asplit in audio_splits:
+            # mel_spec = librosa.feature.melspectrogram(y=asplit, sr=sr)
+            mel_spec = librosa.feature.mfcc(y=asplit, sr=sr,
+                                            n_mfcc=20, dct_type=2, norm='ortho', lifter=0, hop_length=4096, n_fft=819)
+            spectrograms.append(np.mean(mel_spec, axis=0))
+            """
+            plt.figure(figsize=(10, 4))
+            librosa.display.specshow(mel_spec, cmap='plasma', x_axis='time')
+            plt.colorbar()
+            plt.ylabel('Frequency bands')
+            plt.title('Mel Spectrogram')
+            plt.tight_layout()
+            plt.show()
+            """
+        all_spectrograms.append(spectrograms)
+        all_durations.append(durations)
+        print("Finished file #" + str(i + 1))
+    np.save(os.path.join(FULL_DIR, "split_spectrograms.npy"), all_spectrograms)
+    np.save(os.path.join(FULL_DIR, "split_durations.npy"), all_durations)
+    pass
+
+
+def get_label_dataset(valid_only=True):
+    if not os.path.exists(os.path.join(FULL_DIR, "split_spectrograms.npy")) or not \
+            os.path.exists(os.path.join(FULL_DIR, "split_durations.npy")):
+        get_split_spectrograms(valid_only)
+    all_spectrograms = np.load(os.path.join(FULL_DIR, "split_spectrograms.npy"), allow_pickle=True)
+    all_durations = np.load(os.path.join(FULL_DIR, "split_durations.npy"), allow_pickle=True)
+    tr_in = du.ReadLabelSecondsPhrasesFromFolder(FULL_LABELPATH, valid_only=valid_only, get_names=True, get_forms=True)
+    tr_xy = tr_in[0:2]
+    # tr_names = tr_in[3]
+    tr_forms = tr_in[2]
+    tr_set = np.array(pd.DataFrame(tr_xy).transpose())
+
+    def cleanlabel(xlbl):
+        return ''.join([ix for ix in xlbl if not ix.isdigit()]).replace("Codetta", "codetta").replace("retran", "tran")\
+            .replace("'", "").replace("True", "").replace("true", "").replace("Brid", "brid").replace("FugueExp", "Exp")
+        # .replace("Exposition", "A").replace("Development", "B").replace("Recapitulation", "A")\
+        # .replace("pt", "a").replace("st", "b").replace("ct", "c").replace("sec", "d")
+
+    label_encoder = LabelEncoder()
+    alllabels = set()
+    for i in range(tr_set.shape[0]):
+        yset = tr_set[i][1]
+        for inneryset in yset:
+            for iny in inneryset:
+                alllabels.add(cleanlabel(iny))
+    alllabels = np.array(list(alllabels))
+    label_encoder.fit_transform(alllabels)
+    df = pd.DataFrame(columns=['form', 'timestamps', 'durations', 'mel_splits', 'labels'])
+    mel_splits = []
+    for i in range(tr_set.shape[0]):
+        Xt = tr_set[i][0][:-1]  # Timestamps
+        Ft = tr_forms[i]  # Form
+        Ft = list(itertools.chain.from_iterable(itertools.repeat(x, len(Xt)) for x in Ft))
+        Zt = all_spectrograms[i]
+        for inarr in Zt:
+            mel_splits.append(inarr)
+        Wt = np.abs(all_durations[i])
+        yt = tr_set[i][1][:-1]  # Labels
+        for j in range(len(yt)):
+            for lbl in range(len(yt[j])):
+                yt[j][lbl] = cleanlabel(yt[j][lbl])
+            yt[j] = label_encoder.transform(yt[j])
+        if len(Wt) != len(Xt) != len(yt) != len(Zt):
+            print("Error in dataset sizes")
+        df.loc[i] = [Ft, Xt, Wt, Zt, yt]
+
+    timestamps = np.hstack(df['timestamps'])  # [:, np.newaxis]
+    durations = np.hstack(df['durations'])  # [:, np.newaxis]
+    forms = np.hstack(df['form'])  # [:, np.newaxis]
+    labels = []
+    for i in range(df.shape[0]):
+        for inarr in df['labels'].iloc[i]:
+            labels.append(np.array(inarr, dtype=np.int))
+    labels = np.array(labels)  # [:, np.newaxis]
+    mel_splits = np.array(mel_splits)  # [:, np.newaxis]
+    dfmid = pd.DataFrame(columns=['mel_splits'])
+    dfleft = pd.DataFrame(columns=['form', 'timestamps', 'durations'])
+    dfright = pd.DataFrame(columns=['labels'])
+    if len(labels) != len(durations) != len(timestamps) != len(mel_splits):
+        print("Error in dataset sizes")
+    for i in range(len(labels)):
+        dfmid.loc[i] = [mel_splits[i]]
+        dfleft.loc[i] = [forms[i], timestamps[i], durations[i]]
+        dfright.loc[i] = [labels[i]]
+
+    np.set_string_function(
+        lambda x: repr(x).replace('(', '').replace(')', '').replace('array', '').replace("       ", ' ').replace(
+            ", dtype=float32", "").replace("dtype=float32", ""), repr=False)
+    np.set_printoptions(threshold=inf)
+    df2 = pd.DataFrame(dfmid['mel_splits'].values.tolist())
+    df2 = df2.fillna(0)
+    df2 = pd.concat([pd.concat([dfleft, df2], axis=1), dfright], axis=1)
+    return df2, label_encoder
 
 
 def trainLabelModel():
     """
-    TODO: RNN Model should take in timestamp array (X) and labels (y) for training, eval only provide novelty timestamps
-    Seq-2-Seq model:
+    RNN Model should take in timestamp array (X) and labels (y) for training, eval only provide novelty timestamps
     - Convert audio into log-mel spectrogram
     - Break audio into segments between timestamps (mel arrays)
     - Pass RNN two inputs: {[timestamp1_audio], [timestamp2_audio], ...}, [timestamp1, timestamp2]
@@ -2299,44 +2465,182 @@ def trainLabelModel():
         o Have to parse labels specifically for training because of this
     - If necessary, only label phrases, then phrases and parts together
     - Return label(s) for each timestamp
-    - Dataset very small -- skip out on validation data for now?
+    - Dataset very small -- skip out on non-validation data for now?
     """
 
-    n_timesteps = 10
-    model = formnn_lstm(n_timesteps, mode='concat')
-    model_history = trainLabelModel_helper(model, n_timesteps, num_epochs=250)
-    plt.plot(model_history[0])  # plt.plot(model_history.history['loss'])
-    # plt.plot(model_history[1])  # plt.plot(model_history.history['val_loss'])
-    plt.title('Model Loss')
-    plt.ylabel('Loss')
-    plt.xlabel('Epoch')
-    plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig('Initial_LabelModel_Loss.png')
+    df, label_encoder = get_label_dataset(valid_only=True)
+    # TODO: drop 'form' column unless it decreases accuracy
+    # print(df)
+    X_train = df.iloc[:, :-1]
+    y_train = df.iloc[:, -1]
+    print("Train shape:", X_train.shape)
+
+    mean = np.mean(X_train, axis=0)
+    std = np.std(X_train, axis=0)
+    X_train = (X_train - mean) / std
+    print("Normalized Train shape:", X_train.shape)
+
+    X_train = np.array(X_train)
+    int_y_train = np.array(y_train)
+    mlb = MultiLabelBinarizer()
+    # y_train = to_categorical(int_y_train)
+    y_train = mlb.fit_transform(int_y_train)
+
+    """ BASE MODEL """
+    dummy_clf = DummyClassifier(strategy="stratified")
+    dummy_clf.fit(X_train, y_train)
+    DummyClassifier(strategy='stratified')
+    dummy_clf.predict_proba(X_train)
+    print("Dummy classifier accuracy:", dummy_clf.score(X_train, y_train))
+
+    clf = tree.DecisionTreeClassifier()
+    clf = clf.fit(X_train, y_train)
+    clf.predict_proba(X_train)
+    print("Decision tree accuracy:", clf.score(X_train, y_train))
+
+    """
+    selector = SelectKBest(f_classif, k=15)  # 1000 if using RFE
+    Z_train = selector.fit_transform(X_train, y_train)
+    skb_values = selector.get_support()
+    Z_train = X_train[:, skb_values]
+    """
+
+    model = Sequential()
+    model.add(layers.Bidirectional(
+        layers.LSTM(1, return_sequences=True), input_shape=(None, 1), merge_mode='concat'))
+    model.add(layers.TimeDistributed(
+        layers.Dense(len(mlb.classes_), activation='sigmoid')))
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.summary()
+    if not os.path.isfile(os.path.join(MASTER_DIR, 'FormNN_LSTM_Model_Diagram.png')):
+        plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_LSTM_Model_Diagram.png'),
+                   show_shapes=True, show_layer_names=True, expand_nested=True, dpi=300)
+    checkpoint = ModelCheckpoint("best_label_model.hdf5", monitor='accuracy', verbose=0,
+                                 save_best_only=False, mode='max', save_freq='epoch', save_weights_only=True)
+    X_train = X_train[:, :, np.newaxis]
+    if not os.path.isfile(os.path.join(MASTER_DIR, 'best_label_model.hdf5')):
+        model.fit(X_train, y_train, epochs=1, batch_size=1, callbacks=[checkpoint])
+    model.load_weights('best_label_model.hdf5')
+    feature_vectors_model = keras.models.Model(model.input, model.get_layer('time_distributed').output)
+    X_ext = feature_vectors_model.predict(X_train)[:, :, 0]
+
+    dtc = tree.DecisionTreeClassifier()
+    dtc.fit(X_ext, y_train)
+    with open('lstmtree_phrase_model_save.pkl', 'wb') as f:
+        pickle.dump(dtc, f)
+    # with open('treegrad_phrase_model_save.pkl', 'rb') as f:
+    #   dtc = pickle.load(f)
+    dtc_y_pred = dtc.predict(X_ext)
+    dtc_score = dtc.score(X_ext, y_train)
+    print("Deep LSTM Decision Tree accuracy:", dtc_score)
+
+    if not os.path.isfile(os.path.join(MASTER_DIR, 'LSTM_Tree.png')):
+        plt.figure(figsize=(30, 30))
+        tree.plot_tree(dtc, fontsize=10)
+        plt.show()
+        plt.savefig('LSTM_Tree.png', dpi=100)
+
+    def hamming_score(y_true, y_pred):
+        acc_list = []
+        for i in range(y_true.shape[0]):
+            set_true = set(np.where(y_true[i])[0])
+            set_pred = set(np.where(y_pred[i])[0])
+            if len(set_true) == 0 and len(set_pred) == 0:
+                tmp_a = 1
+            else:
+                tmp_a = len(set_true.intersection(set_pred)) / float(len(set_true.union(set_pred)))
+            acc_list.append(tmp_a)
+        return np.mean(acc_list)
+
+    print("Deep LSTM Decision Tree hamming score:", hamming_score(y_train, dtc_y_pred))
+
+    preds = (mlb.inverse_transform(dtc_y_pred))
+    predictions = [label_encoder.inverse_transform(inarr) for inarr in preds]
+    actual = [label_encoder.inverse_transform(inarr) for inarr in int_y_train]
+    print(predictions)
+    print(actual)
+    # For prediction: display timestamp alongside predicted labels. Need to take in predicted form too
+
+    """
+    # Too slow, poor accuracy (0.03% hamming score)
+    X_train = X_train[:, :, np.newaxis]
+    model = formnn_lstm(None, mode='concat', num_classes=len(mlb.classes_))
+    history_loss = []
+    history_accuracy = []
+    for i in range(10):
+        checkpoint = ModelCheckpoint("best_form_lstm_model.hdf5", monitor='accuracy', verbose=0,
+                                     save_best_only=False, mode='max', save_freq='epoch', save_weights_only=True)
+        model_history = model.fit(X_train, y_train, epochs=1, batch_size=1, verbose=1, callbacks=[checkpoint])
+        history_loss.append(model_history.history['loss'])
+        history_accuracy.append(model_history.history['acc'])
+    """
+
+    """
+    # Only works with single-label classification
+    model = TGDClassifier(num_leaves=31, max_depth=-1, learning_rate=0.1, n_estimators=100,
+                          autograd_config={'refit_splits': True})
+    model.fit(X_train, y_train)
+    acc = accuracy_score(y_train, model.predict(X_train))
+    print('TreeGrad Deep Neural Decision Forest accuracy: ', acc)
+
+    print('Plotting 0th tree...')  # one tree use categorical feature to split
+    ax = lgb.plot_tree(model.base_model_, tree_index=0, figsize=(15, 15), show_info=['split_gain'])
+    plt.savefig('TreeGrad_Phrase_Model.png')
     plt.show()
-
-    plt.plot(model_history[1])  # plt.plot(model_history.history['accuracy'])
-    # plt.plot(model_history[3])  # plt.plot(model_history.history['val_accuracy'])
-    plt.title('Model Accuracy')
-    plt.ylabel('Accuracy')
-    plt.xlabel('Epoch')
-    plt.legend(['Train', 'Test'], loc='upper left')
-    plt.savefig('Initial_LabelModel_Accuracy.png')
+    print('Plotting feature importances...')
+    ax = lgb.plot_importance(model.base_model_, max_num_features=15)
+    plt.savefig('TreeGrad_Phrase_Feature_Importance.png')
     plt.show()
+    """
 
-    print("Evaluating...")
-    X, y = get_sequence(n_timesteps)
-    score = model.evaluate(X, y)
-    print("Evaluation complete!\nScore:")
-    print(f"Loss: {score[0]}\tAccuracy: {score[1]}")
+    """
+    predictions = dtc_y_pred
+    predictions = (mlb.inverse_transform(predictions))
+    predictions = (label_encoder.inverse_transform(predictions))
+    predictions = pd.DataFrame({'Predicted Values': predictions})
 
-    print("Predicting...")
-    X, y = get_sequence(n_timesteps)
-    yhat = model.predict(X, verbose=1)
-    print("Prediction complete!")
-    for i in range(n_timesteps):
-        print('Expected:', y[0, i], 'Predicted', yhat[0, i])
+    actual = (label_encoder.inverse_transform(int_y_train))
+    actual = pd.DataFrame({'Actual Values': actual})
+
+    cm = multilabel_confusion_matrix(actual, predictions)
+    plt.figure(figsize=(12, 10))
+    cm = pd.DataFrame(cm, index=[i for i in label_encoder.classes_], columns=[i for i in label_encoder.classes_])
+    ax = sns.heatmap(cm, linecolor='white', cmap='Blues', linewidth=1, annot=True, fmt='')
+    bottom, top = ax.get_ylim()
+    ax.set_ylim(bottom + 0.5, top - 0.5)
+    plt.title('Confusion Matrix', size=20)
+    plt.xlabel('Predicted Labels', size=14)
+    plt.ylabel('Actual Labels', size=14)
+    plt.savefig('TreeGrad_Phrase_Confusion_Matrix.png')
+    plt.show()
+    clf_report = classification_report(actual, predictions, output_dict=True,
+                                       target_names=[i for i in label_encoder.classes_])
+    sns.heatmap(pd.DataFrame(clf_report).iloc[:, :].T, annot=True, cmap='viridis')
+    plt.title('Classification Report', size=20)
+    plt.savefig('TreeGrad_Phrase_Classification_Report.png')
+    plt.show()
+    """
     pass
+
+
+def predictLabels():
+    # TODO: full prediction system - modify predictform to take dir/file, run both pred functions in sequence
+    # Pass path to predictForm and retrieve form [X]?
+    # Use novelty function for each song, save array of predicted peaks using np.save and load
+    pass
+
 # endregion
+
+
+"""===================================================================================="""
+
+
+def predictFormAndLabels():
+    """
+    - Call predictLabels and return both labels and form
+    - Display in dataset text-file design form
+    """
+    pass
 
 
 if __name__ == '__main__':
@@ -2348,20 +2652,14 @@ if __name__ == '__main__':
     # prepare_train_data()
     # buildValidationSet()
     # create_form_dataset()
-
     # generate_augmented_datasets()
+    # prepare_lstm_peaks()
+
     # trainFormModel()
     # predictForm()
 
-    # prepare_lstm_peaks()
     trainLabelModel()
-    print("\nDone!")
+    # predictLabels()
 
-    # Measure confidence level? Prediction Interval (PI)
-    # https://medium.com/hal24k-techblog/how-to-generate-neural-network-confidence-intervals-with-keras-e4c0b78ebbdf
-    # https://github.com/philipperemy/keract#display-the-activations-as-a-heatmap-overlaid-on-an-image
-    # Check out humdrum dataset https://www.humdrum.org/
-    # Josh Albrecht? https://www.kent.edu/music/joshua-albrecht
-    # Publish in Society for Music Theorists? SMT - Due mid-Feb., conference in Nov.
-    # https://towardsdatascience.com/10-minutes-to-building-a-cnn-binary-image-classifier-in-tensorflow-4e216b2034aa
-    # Use novelty function for each song, save array of predicted peaks using np.save and load
+    # predictFormAndLabels()
+    print("\nDone!")
