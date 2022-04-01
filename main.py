@@ -4,7 +4,6 @@ import itertools
 import math
 import re
 import time
-from threading import Thread
 import glob as gb
 import librosa
 import matplotlib.pyplot as plt
@@ -12,7 +11,6 @@ import librosa.display
 import pyaudio
 import wave
 import pickle
-# from IPython.display import Audio
 import torch
 from matplotlib.pyplot import specgram
 import pandas as pd
@@ -92,8 +90,9 @@ from XBNet.run import run_XBNET
 import lightgbm as lgb
 from treegrad import TGDClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
+import logging
 
-
+tf.get_logger().setLevel(logging.ERROR)
 k.set_image_data_format('channels_last')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -118,7 +117,7 @@ FULL_LABELPATH = os.path.join(MASTER_LABELPATH, 'Full/')
 # endregion
 
 
-"""===================================================================================="""
+"""=================================================================================================================="""
 
 
 # region DEPRECATED
@@ -544,7 +543,7 @@ def formnn_midi(output_channels=32, numclasses=12):
     return w
 
 
-def formnn_mls2(output_channels=32, lrval=0.0001):
+def formnn_mls2(output_channels=32):
     inputA = layers.Input(batch_input_shape=(None, None, None, 1))
     x = layers.Conv2D(filters=output_channels, kernel_size=(5, 7), padding='same',
                       kernel_regularizer=l2(0.01), bias_regularizer=l2(0.01), activation='relu')(inputA)
@@ -553,7 +552,7 @@ def formnn_mls2(output_channels=32, lrval=0.0001):
     return x
 
 
-def formnn_sslm2(output_channels=32, lrval=0.0001):
+def formnn_sslm2(output_channels=32):
     inputB = layers.Input(batch_input_shape=(None, None, None, 1))  # (None, None, None, 4)
     y = layers.Conv2D(filters=output_channels, kernel_size=(5, 7), padding='same',
                       kernel_regularizer=l2(0.01), bias_regularizer=l2(0.01), activation='relu')(inputB)
@@ -563,7 +562,7 @@ def formnn_sslm2(output_channels=32, lrval=0.0001):
     return y
 
 
-def formnn_pipeline2(combined, output_channels=32, lrval=0.0001, numclasses=12):
+def formnn_pipeline2(combined, output_channels=32, numclasses=12):
     z = layers.Conv2D(filters=(output_channels * 2), kernel_size=(3, 5),
                       padding='same', dilation_rate=(1, 3), kernel_regularizer=l2(0.01),
                       bias_regularizer=l2(0.01), activation='relu')(combined)
@@ -957,11 +956,11 @@ def oldWorkingtrainFormModel():
     # df.to_csv(os.path.join(MASTER_DIR, 'full_modified_dataset.csv'))
 
     X_train = train.iloc[:, 3:-1]
-    X_train_names = train.iloc[:, 0:3]
+    # X_train_names = train.iloc[:, 0:3]
     y_train = train.iloc[:, -1]
     print("Train shape:", X_train.shape)
     X_test = test.iloc[:, 3:-1]
-    X_test_names = test.iloc[:, 0:3]
+    # X_test_names = test.iloc[:, 0:3]
     y_test = test.iloc[:, -1]
     print("Test shape:", X_test.shape)
 
@@ -990,11 +989,11 @@ def oldWorkingtrainFormModel():
 
     label_encoder = LabelEncoder()
     old_y_train = y_train
-    old_y_test = y_test
+    # old_y_test = y_test
     int_y_train = label_encoder.fit_transform(y_train)
     print(int_y_train.shape)
     # int_y_train = int_y_train.reshape(len(int_y_train), 1)
-    int_y_test = label_encoder.fit_transform(y_test)
+    # int_y_test = label_encoder.fit_transform(y_test)
     # int_y_test = int_y_test.reshape(len(int_y_test), 1)
     y_train = to_categorical(label_encoder.fit_transform(y_train))
     y_test = to_categorical(label_encoder.fit_transform(y_test))
@@ -1039,7 +1038,7 @@ def oldWorkingtrainFormModel():
     clf = tree.DecisionTreeClassifier()
     clf = clf.fit(Z_train, y_train)
     clf.predict(Z_test)
-    treedepth = clf.tree_.max_depth
+    # treedepth = clf.tree_.max_depth
     skb_score = clf.score(Z_test, y_test)
     print("K-Best Decision tree accuracy:", skb_score)  # Highest score: 84.3% accuracy
 
@@ -1076,8 +1075,8 @@ def oldWorkingtrainFormModel():
     if skb_score > rfe_score:
         X_train = Z_train[:, :, np.newaxis]
         X_test = Z_test[:, :, np.newaxis]
-        X1_train = Z_train
-        X1_test = Z_test
+        # X1_train = Z_train
+        # X1_test = Z_test
     else:
         X_train = W_train[:, :, np.newaxis]
         X_test = W_test[:, :, np.newaxis]
@@ -1679,7 +1678,7 @@ def test_trainLabelModel():
 # endregion
 
 
-"""===================================================================================="""
+"""=================================================================================================================="""
 
 
 # region DataTools
@@ -2023,11 +2022,11 @@ def trainFormModel():
     # df.to_csv(os.path.join(MASTER_DIR, 'full_modified_dataset.csv'))
 
     X_train = train.iloc[:, 3:-1]
-    X_train_names = train.iloc[:, 0:3]
+    # X_train_names = train.iloc[:, 0:3]
     y_train = train.iloc[:, -1]
     print("Train shape:", X_train.shape)
     X_test = test.iloc[:, 3:-1]
-    X_test_names = test.iloc[:, 0:3]
+    # X_test_names = test.iloc[:, 0:3]
     y_test = test.iloc[:, -1]
     print("Test shape:", X_test.shape)
 
@@ -2056,7 +2055,7 @@ def trainFormModel():
 
     label_encoder = LabelEncoder()
     old_y_train = y_train
-    old_y_test = y_test
+    # old_y_test = y_test
     int_y_train = label_encoder.fit_transform(y_train)
     print(int_y_train.shape)
     # int_y_train = int_y_train.reshape(len(int_y_train), 1)
@@ -2154,11 +2153,11 @@ def trainFormModel():
     print('TreeGrad Deep Neural Decision Forest accuracy: ', acc)
 
     print('Plotting 0th tree...')  # one tree use categorical feature to split
-    ax = lgb.plot_tree(model.base_model_, tree_index=0, figsize=(15, 15), show_info=['split_gain'])
+    lgb.plot_tree(model.base_model_, tree_index=0, figsize=(15, 15), show_info=['split_gain'])
     plt.savefig('TreeGrad_Model.png')
     plt.show()
     print('Plotting feature importances...')
-    ax = lgb.plot_importance(model.base_model_, max_num_features=15)
+    lgb.plot_importance(model.base_model_, max_num_features=15)
     plt.savefig('TreeGrad_Feature_Importance.png')
     plt.show()
 
@@ -2200,8 +2199,9 @@ def trainFormModel():
     pass
 
 
-def preparePredictionData(filepath, savetoexcel=False):
-    print("Preparing MLS")
+def preparePredictionData(filepath, savetoexcel=False, verbose=True):
+    if verbose:
+        print("Preparing MLS")
     mls = dus.util_main_helper(feature="mls", filepath=filepath, predict=True)
 
     sngdur = 0
@@ -2212,7 +2212,8 @@ def preparePredictionData(filepath, savetoexcel=False):
         lambda x: repr(x).replace('(', '').replace(')', '').replace('array', '').replace("       ", ' '), repr=False)
     np.set_printoptions(threshold=inf)
 
-    print("Building feature table")
+    if verbose:
+        print("Building feature table")
     df = pd.DataFrame(columns=['piece_name', 'composer', 'filename', 'duration', 'ssm_log_mel_mean', 'formtype'])
     c_flname = os.path.basename(filepath.split('/')[-1].split('.')[0])
 
@@ -2226,15 +2227,16 @@ def preparePredictionData(filepath, savetoexcel=False):
     return df
 
 
-def predictForm():
-    midpath = input("Enter path to folder or audio file: ")
+def predictForm(midpath=None, verbose=True):
+    if midpath is None:
+        midpath = input("Enter path to folder or audio file: ")
     df = pd.DataFrame()
     if not os.path.exists(midpath):
         raise FileNotFoundError("Path not found or does not exist.")
     else:
         if os.path.isfile(midpath):
             # df2 = pd.read_excel(os.path.join(MASTER_DIR, 'brahms_opus117_1.xlsx'))
-            df = preparePredictionData(midpath, savetoexcel=False)
+            df = preparePredictionData(midpath, savetoexcel=False, verbose=verbose)
         elif os.path.isdir(midpath):
             if midpath[-1] != "\\" or midpath[-1] != "/":
                 if "\\" in midpath:
@@ -2249,9 +2251,10 @@ def predictForm():
             for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(midpath):
                 for f in mid_filenames:
                     if f.endswith(tuple(audio_extenions)):
-                        print("Reading file #" + str(cnt + 1))
+                        if verbose:
+                            print("Reading file #" + str(cnt + 1))
                         mid_path = mid_dirpath + f
-                        dft = preparePredictionData(mid_path, savetoexcel=False)
+                        dft = preparePredictionData(mid_path, savetoexcel=False, verbose=verbose)
                         df = pd.concat([df, dft], ignore_index=True).reset_index(drop=True)
                         cnt += 1
         else:
@@ -2262,7 +2265,8 @@ def predictForm():
     nonlist = df[['duration']]
     df.drop(columns=['piece_name', 'composer', 'filename', 'duration', 'formtype'], inplace=True)
     df = df[['ssm_log_mel_mean']]
-    print("Fixing broken array cells as needed...")
+    if verbose:
+        print("Fixing broken array cells as needed...")
 
     def fix_broken_arr(strx):
         if '[' in strx:
@@ -2273,7 +2277,8 @@ def predictForm():
 
     for col in df.columns:
         df[col] = df[col].apply(lambda x: fix_broken_arr(x))
-    print("Done processing cells, building data set...")
+    if verbose:
+        print("Done processing cells, building data set...")
 
     d = [pd.DataFrame(df[col].astype(str).apply(literal_eval).values.tolist()) for col in df.columns]
     df = pd.concat(d, axis=1).fillna(0)
@@ -2311,16 +2316,22 @@ def predictForm():
         model = pickle.load(f)
     result = model.predict(X_test)
 
+    results = []
+    names = []
     for i in range(X_test.shape[0]):
-        print("Performing predictions on", X_test_names[i][2])
         resultlbl = label_encoder.inverse_transform([result[i]])
-        print("\t\tPredicted form:", resultlbl[0])
+        if verbose:
+            print("Performing predictions on", X_test_names[i][2])
+            print("\t\tPredicted form:", resultlbl[0])
+        results.append([resultlbl[0]])
+        names.append([X_test_names[i][2]])
+    return results, names
 
 
 # endregion
 
 
-"""===================================================================================="""
+"""=================================================================================================================="""
 
 
 # region LabelModel
@@ -2394,9 +2405,15 @@ def get_label_dataset(valid_only=True):
 
     def cleanlabel(xlbl):
         return ''.join([ix for ix in xlbl if not ix.isdigit()]).replace("Codetta", "codetta").replace("retran", "tran")\
-            .replace("'", "").replace("True", "").replace("true", "").replace("Brid", "brid").replace("FugueExp", "Exp")
-        # .replace("Exposition", "A").replace("Development", "B").replace("Recapitulation", "A")\
-        # .replace("pt", "a").replace("st", "b").replace("ct", "c").replace("sec", "d")
+            .replace("'", "").replace("True", "").replace("true", "").replace("Bri", "bri").replace("FugueExp", "Exp")\
+            .replace("domProlongation", "transition").replace("h", "c").replace("Aev", "Dev")\
+            .replace("Tcem", "Them").replace("COAA", "CODA").replace("Trio", "B")\
+            .replace("bridge", "transition").replace("Entry", "A").replace("Episode", "B")\
+            .replace("Exposition", "A").replace("Development", "B").replace("Recapitulation", "A")\
+            .replace("pt", "a").replace("st", "b").replace("ct", "c").replace("var", "sec")\
+            .replace("ccaraceribic", "characteristic").replace("Middle", "").replace("Final", "").replace("part", "sec")
+        # .replace("Silence", "").replace("End", "").replace("part", "").replace("CODA", "ct").replace("D", "A")
+        # These should be removed when a better architecture becomes possible and/or dataset increases
 
     label_encoder = LabelEncoder()
     alllabels = set()
@@ -2404,8 +2421,12 @@ def get_label_dataset(valid_only=True):
         yset = tr_set[i][1]
         for inneryset in yset:
             for iny in inneryset:
-                alllabels.add(cleanlabel(iny))
-    alllabels = np.array(list(alllabels))
+                tlbl = cleanlabel(iny)
+                if (tlbl == "i" or tlbl == "g") and len(tlbl) == 1:  # To remove
+                    tlbl = "e" if tlbl == "i" else "d"
+                alllabels.add(tlbl)
+    alllabels = np.array(list(filter(None, sorted(alllabels))))
+    print(alllabels)
     label_encoder.fit_transform(alllabels)
     df = pd.DataFrame(columns=['form', 'timestamps', 'durations', 'mel_splits', 'labels'])
     mel_splits = []
@@ -2420,21 +2441,24 @@ def get_label_dataset(valid_only=True):
         yt = tr_set[i][1][:-1]  # Labels
         for j in range(len(yt)):
             for lbl in range(len(yt[j])):
-                yt[j][lbl] = cleanlabel(yt[j][lbl])
-            yt[j] = label_encoder.transform(yt[j])
+                tlbl = cleanlabel(yt[j][lbl])
+                if (tlbl == "i" or tlbl == "g") and len(tlbl) == 1:  # To remove
+                    tlbl = "e" if tlbl == "i" else "d"
+                yt[j][lbl] = tlbl
+            yt[j] = label_encoder.transform(np.array(list(set(yt[j]))))
         if len(Wt) != len(Xt) != len(yt) != len(Zt):
             print("Error in dataset sizes")
         df.loc[i] = [Ft, Xt, Wt, Zt, yt]
 
-    timestamps = np.hstack(df['timestamps'])  # [:, np.newaxis]
-    durations = np.hstack(df['durations'])  # [:, np.newaxis]
-    forms = np.hstack(df['form'])  # [:, np.newaxis]
+    timestamps = np.hstack(df['timestamps'])
+    durations = np.hstack(df['durations'])
+    forms = np.hstack(df['form'])
     labels = []
     for i in range(df.shape[0]):
         for inarr in df['labels'].iloc[i]:
             labels.append(np.array(inarr, dtype=np.int))
-    labels = np.array(labels)  # [:, np.newaxis]
-    mel_splits = np.array(mel_splits)  # [:, np.newaxis]
+    labels = np.array(labels)
+    mel_splits = np.array(mel_splits)
     dfmid = pd.DataFrame(columns=['mel_splits'])
     dfleft = pd.DataFrame(columns=['form', 'timestamps', 'durations'])
     dfright = pd.DataFrame(columns=['labels'])
@@ -2455,7 +2479,17 @@ def get_label_dataset(valid_only=True):
     return df2, label_encoder
 
 
-def trainLabelModel():
+def formnn_label_lstm(mlb):
+    model = Sequential()
+    model.add(layers.Bidirectional(    # Try recurrent_dropout=0.4 or dropout=0.2, recurrent_dropout=0.2
+        layers.LSTM(4, dropout=0.2, return_sequences=True), input_shape=(None, 1), merge_mode='concat'))
+    model.add(layers.TimeDistributed(
+        layers.Dense(len(mlb.classes_), activation='sigmoid')))
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
+
+
+def trainLabelModel(retrain=True):
     """
     RNN Model should take in timestamp array (X) and labels (y) for training, eval only provide novelty timestamps
     - Convert audio into log-mel spectrogram
@@ -2469,8 +2503,8 @@ def trainLabelModel():
     """
 
     df, label_encoder = get_label_dataset(valid_only=True)
-    # TODO: drop 'form' column unless it decreases accuracy
-    # print(df)
+    np.save(os.path.join(MASTER_DIR, 'label_classes.npy'), label_encoder.classes_)
+    # Maybe drop 'form' column unless it decreases accuracy? Seems to work better with it though
     X_train = df.iloc[:, :-1]
     y_train = df.iloc[:, -1]
     print("Train shape:", X_train.shape)
@@ -2485,6 +2519,7 @@ def trainLabelModel():
     mlb = MultiLabelBinarizer()
     # y_train = to_categorical(int_y_train)
     y_train = mlb.fit_transform(int_y_train)
+    np.save(os.path.join(MASTER_DIR, 'label_mlb_classes.npy'), mlb.classes_)
 
     """ BASE MODEL """
     dummy_clf = DummyClassifier(strategy="stratified")
@@ -2497,20 +2532,20 @@ def trainLabelModel():
     clf = clf.fit(X_train, y_train)
     clf.predict_proba(X_train)
     print("Decision tree accuracy:", clf.score(X_train, y_train))
+    with open('dcntree_phrase_model_save.pkl', 'wb') as f:
+        pickle.dump(clf, f)
 
     """
-    selector = SelectKBest(f_classif, k=15)  # 1000 if using RFE
-    Z_train = selector.fit_transform(X_train, y_train)
-    skb_values = selector.get_support()
-    Z_train = X_train[:, skb_values]
+    # Fails predicting due to class imbalance
+    clf = RandomForestClassifier()
+    clf.fit(X_train, y_train)
+    clf.predict_proba(X_train)
+    print("Random Forest accuracy:", clf.score(X_train, y_train))
+    with open('rndforest_phrase_model_save.pkl', 'wb') as f:
+        pickle.dump(clf, f)
     """
 
-    model = Sequential()
-    model.add(layers.Bidirectional(
-        layers.LSTM(1, return_sequences=True), input_shape=(None, 1), merge_mode='concat'))
-    model.add(layers.TimeDistributed(
-        layers.Dense(len(mlb.classes_), activation='sigmoid')))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model = formnn_label_lstm(mlb)
     model.summary()
     if not os.path.isfile(os.path.join(MASTER_DIR, 'FormNN_LSTM_Model_Diagram.png')):
         plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_LSTM_Model_Diagram.png'),
@@ -2518,9 +2553,12 @@ def trainLabelModel():
     checkpoint = ModelCheckpoint("best_label_model.hdf5", monitor='accuracy', verbose=0,
                                  save_best_only=False, mode='max', save_freq='epoch', save_weights_only=True)
     X_train = X_train[:, :, np.newaxis]
-    if not os.path.isfile(os.path.join(MASTER_DIR, 'best_label_model.hdf5')):
-        model.fit(X_train, y_train, epochs=1, batch_size=1, callbacks=[checkpoint])
-    model.load_weights('best_label_model.hdf5')
+    if retrain:
+        model.fit(X_train, y_train, epochs=5, batch_size=1, callbacks=[checkpoint])
+    else:
+        if not os.path.isfile(os.path.join(MASTER_DIR, 'best_label_model.hdf5')):
+            model.fit(X_train, y_train, epochs=10, batch_size=1, callbacks=[checkpoint])
+        model.load_weights('best_label_model.hdf5')
     feature_vectors_model = keras.models.Model(model.input, model.get_layer('time_distributed').output)
     X_ext = feature_vectors_model.predict(X_train)[:, :, 0]
 
@@ -2528,8 +2566,6 @@ def trainLabelModel():
     dtc.fit(X_ext, y_train)
     with open('lstmtree_phrase_model_save.pkl', 'wb') as f:
         pickle.dump(dtc, f)
-    # with open('treegrad_phrase_model_save.pkl', 'rb') as f:
-    #   dtc = pickle.load(f)
     dtc_y_pred = dtc.predict(X_ext)
     dtc_score = dtc.score(X_ext, y_train)
     print("Deep LSTM Decision Tree accuracy:", dtc_score)
@@ -2537,8 +2573,8 @@ def trainLabelModel():
     if not os.path.isfile(os.path.join(MASTER_DIR, 'LSTM_Tree.png')):
         plt.figure(figsize=(30, 30))
         tree.plot_tree(dtc, fontsize=10)
-        plt.show()
         plt.savefig('LSTM_Tree.png', dpi=100)
+        plt.show()
 
     def hamming_score(y_true, y_pred):
         acc_list = []
@@ -2559,7 +2595,6 @@ def trainLabelModel():
     actual = [label_encoder.inverse_transform(inarr) for inarr in int_y_train]
     print(predictions)
     print(actual)
-    # For prediction: display timestamp alongside predicted labels. Need to take in predicted form too
 
     """
     # Too slow, poor accuracy (0.03% hamming score)
@@ -2575,23 +2610,29 @@ def trainLabelModel():
         history_accuracy.append(model_history.history['acc'])
     """
 
-    """
-    # Only works with single-label classification
-    model = TGDClassifier(num_leaves=31, max_depth=-1, learning_rate=0.1, n_estimators=100,
+    oneclass_int_y_train = []
+    for inarr in int_y_train:
+        oneclass_int_y_train.append(inarr[0])
+    X_train = X_train[:, :, 0]
+    # Only takes input for single-label classification, great accuracy though
+    model = TGDClassifier(num_leaves=31, max_depth=-1, learning_rate=0.01, n_estimators=100,
                           autograd_config={'refit_splits': True})
-    model.fit(X_train, y_train)
-    acc = accuracy_score(y_train, model.predict(X_train))
+    model.fit(X_train, oneclass_int_y_train)
+    pred = model.predict(X_train)
+    acc = accuracy_score(oneclass_int_y_train, pred)
     print('TreeGrad Deep Neural Decision Forest accuracy: ', acc)
 
     print('Plotting 0th tree...')  # one tree use categorical feature to split
-    ax = lgb.plot_tree(model.base_model_, tree_index=0, figsize=(15, 15), show_info=['split_gain'])
+    lgb.plot_tree(model.base_model_, tree_index=0, figsize=(15, 15), show_info=['split_gain'])
     plt.savefig('TreeGrad_Phrase_Model.png')
     plt.show()
     print('Plotting feature importances...')
-    ax = lgb.plot_importance(model.base_model_, max_num_features=15)
+    lgb.plot_importance(model.base_model_, max_num_features=15)
     plt.savefig('TreeGrad_Phrase_Feature_Importance.png')
     plt.show()
-    """
+
+    with open('treegrad_phrase_model_save.pkl', 'wb') as f:
+        pickle.dump(model, f)
 
     """
     predictions = dtc_y_pred
@@ -2623,24 +2664,256 @@ def trainLabelModel():
     pass
 
 
-def predictLabels():
-    # TODO: full prediction system - modify predictform to take dir/file, run both pred functions in sequence
-    # Pass path to predictForm and retrieve form [X]?
-    # Use novelty function for each song, save array of predicted peaks using np.save and load
+def predictLabels(midpath=None, verbose=True, printform=False, printresults=True):
+    if midpath is None:
+        midpath = input("Enter path to folder or audio file: ")
+    all_peaks = []
+    filenames = []
+    if not os.path.exists(midpath):
+        raise FileNotFoundError("Path not found or does not exist.")
+    else:
+        if os.path.isfile(midpath):
+            all_peaks.append(du.peak_picking(midpath, returnpeaks=True, verbose=False))
+            filenames.append(midpath)
+        elif os.path.isdir(midpath):
+            if midpath[-1] != "\\" or midpath[-1] != "/":
+                if "\\" in midpath:
+                    midpath = midpath + "\\"
+                else:
+                    midpath = midpath + "/"
+            cnt = 0
+            audio_extenions = ["3gp", "aa", "aac", "aax", "act", "aiff", "alac", "amr", "ape", "au", "awb", "dct",
+                               "dss", "dvf", "flac", "gsm", "iklax", "ivs", "m4a", "m4b", "m4p", "mmf", "mp3", "mpc",
+                               "msv", "nmf", "ogg", "oga", "mogg", "opus", "ra", "rm", "raw", "rf64", "sln", "tta",
+                               "voc", "vox", "wav", "wma", "wv", "webm", "8svx", "cda", "mid", "midi", "mp4"]
+            for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(midpath):
+                for f in mid_filenames:
+                    if f.endswith(tuple(audio_extenions)):
+                        if verbose:
+                            print("Reading file #" + str(cnt + 1))
+                        mid_path = mid_dirpath + f
+                        all_peaks.append(du.peak_picking(mid_path, returnpeaks=True, verbose=False))
+                        filenames.append(mid_path)
+                        cnt += 1
+        else:
+            raise FileNotFoundError("Path resulted in error.")
+
+    formsin, namesin = predictForm(midpath, verbose=False)
+    # print(all_peaks, "\n", formsin, "\n", namesin)
+    if verbose:
+        print("Done predicting forms, processing file data...")
+
+    all_spectrograms = []
+    all_durations = []
+    for i in range(len(filenames)):
+        Xt = all_peaks[i]
+        audio_splits = []
+        durations = []
+        splity = du.SplitAudio("", filenames[i])
+        sr = splity.get_samplerate()
+        for idx, timestamp in enumerate(Xt):
+            if idx != len(Xt) - 1:
+                asplit = splity.single_split(Xt[idx], Xt[idx + 1], export=False)
+                asplit = du.audiosegment_to_ndarray(asplit)
+                if len(asplit) == 0:
+                    print("i1 =", Xt[idx], "\ti2 =", Xt[idx + 1])
+                    print("Ndarr:", len(asplit))
+                    print("Duration:", splity.get_duration(), "\tExpected:", Xt[-1])
+                audio_splits.append(asplit)
+                durations.append(abs(float(Xt[idx + 1] - Xt[idx])))
+        spectrograms = []
+        for asplit in audio_splits:
+            mel_spec = librosa.feature.mfcc(y=asplit, sr=sr,
+                                            n_mfcc=20, dct_type=2, norm='ortho', lifter=0, hop_length=4096, n_fft=819)
+            spectrograms.append(np.mean(mel_spec, axis=0))
+        all_spectrograms.append(spectrograms)
+        all_durations.append(durations)
+        if verbose:
+            print("Finished file #" + str(i + 1))
+
+    label_encoder_form = LabelEncoder()
+    label_encoder_form.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
+    df = pd.DataFrame(columns=['form', 'timestamps', 'durations', 'mel_splits'])
+    mel_splits = []
+    for i in range(len(filenames)):
+        Xt = all_peaks[i][:-1]  # Timestamps
+        Ft = formsin[i]  # Form
+        Ft = label_encoder_form.transform(Ft)
+        Ft = list(itertools.chain.from_iterable(itertools.repeat(x, len(Xt)) for x in Ft))
+        Zt = all_spectrograms[i]
+        for inarr in Zt:
+            mel_splits.append(inarr)
+        Wt = np.abs(all_durations[i])
+        if len(Wt) != len(Xt) != len(Zt):
+            print("Error in dataset sizes - Wt:", len(Wt), " Xt:", len(Xt), " Zt:", len(Zt))
+        df.loc[i] = [Ft, Xt, Wt, Zt]
+
+    timestamps = np.hstack(df['timestamps'])
+    durations = np.hstack(df['durations'])
+    forms = np.hstack(df['form'])
+    mel_splits = np.array(mel_splits)
+    dfmid = pd.DataFrame(columns=['mel_splits'])
+    dfleft = pd.DataFrame(columns=['form', 'timestamps', 'durations'])
+    if len(durations) != len(timestamps) != len(mel_splits) != len(forms):
+        print("Error in dataset sizes - durations:",
+              len(durations), " timetamps:", len(timestamps), " mel_splits:", len(mel_splits), " forms:", len(forms))
+    for i in range(len(timestamps)):
+        dfmid.loc[i] = [mel_splits[i]]
+        dfleft.loc[i] = [forms[i], timestamps[i], durations[i]]
+
+    np.set_string_function(
+        lambda x: repr(x).replace('(', '').replace(')', '').replace('array', '').replace("       ", ' ').replace(
+            ", dtype=float32", "").replace("dtype=float32", ""), repr=False)
+    np.set_printoptions(threshold=inf)
+    df2 = pd.DataFrame(dfmid['mel_splits'].values.tolist())
+    df2 = df2.fillna(0)
+    df2 = pd.concat([dfleft, df2], axis=1)
+    df2 = df2.fillna(0)
+
+    if verbose:
+        print("Done processing files, building data set...\n")
+    label_encoder = LabelEncoder()
+    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'label_classes.npy'))
+    X_test = df2
+    if X_test.shape[1] <= 1341:  # Match shape to training data
+        t_cnt = 0
+        while X_test.shape[1] < 1341:
+            X_test = X_test.join(pd.DataFrame(columns=['filler' + str(t_cnt)]), how='outer')
+            t_cnt += 1
+    else:
+        X_test = X_test.iloc[:, :1341]
+    X_test = X_test.fillna(0)
+
+    min_max_scaler = preprocessing.MinMaxScaler()
+    X_test = min_max_scaler.fit_transform(X_test)
+    X_test = np.array(X_test)
+
+    mlb = MultiLabelBinarizer()
+    mlb.classes_ = np.load(os.path.join(MASTER_DIR, 'label_mlb_classes.npy'), allow_pickle=True)
+    model = formnn_label_lstm(mlb)
+    X_test = X_test[:, :, np.newaxis]
+    # print(X_test)
+    model.load_weights('best_label_model.hdf5')
+    # model.summary()
+    feature_vectors_model = keras.models.Model(model.input, model.get_layer('time_distributed').output)
+    X_ext = feature_vectors_model.predict(X_test)[:, :, 0]
+    # with open('lstmtree_phrase_model_save_best.pkl', 'rb') as f:
+    with open('lstmtree_phrase_model_save_best.pkl', 'rb') as f:
+        dtc = pickle.load(f)
+    dtc_y_pred = dtc.predict(X_ext)
+    preds = (mlb.inverse_transform(dtc_y_pred))
+    all_predictions = [label_encoder.inverse_transform(inarr) for inarr in preds]
+    lstmpredictions = []
+    for i in range(len(all_peaks)):
+        inarr = []
+        for j in range(len(all_peaks[i])-1):
+            inarr.append(all_predictions.pop())
+        lstmpredictions.append(inarr)
+
+    with open('dcntree_phrase_model_save_best.pkl', 'rb') as f:
+        dtc = pickle.load(f)
+    dtc_y_pred = dtc.predict(X_test[:, :, 0])
+    preds = (mlb.inverse_transform(dtc_y_pred))
+    all_predictions = [label_encoder.inverse_transform(inarr) for inarr in preds]
+    dtcpredictions = []
+    for i in range(len(all_peaks)):
+        inarr = []
+        for j in range(len(all_peaks[i]) - 1):
+            inarr.append(all_predictions.pop())
+        dtcpredictions.append(inarr)
+
+    with open('treegrad_phrase_model_save_best.pkl', 'rb') as f:
+        model = pickle.load(f)
+    preds = model.predict(X_test[:, :, 0])
+    all_predictions = label_encoder.inverse_transform(preds).tolist()
+    tgradpredictions = []
+    for i in range(len(all_peaks)):
+        inarr = []
+        for j in range(len(all_peaks[i]) - 1):
+            inarr.append(all_predictions.pop())
+        tgradpredictions.append(inarr)
+
+    # Maybe add "average guess" -> pick most guessed label(s)?
+    # Model prioritizes large form label, understandably so
+    alldf = []
+    for i in range(len(filenames)):
+        df = pd.DataFrame(columns=['Guesser:', 'LSTMTree', 'DcnTree', 'TreeGrad'])
+        cnt = 0
+        df.loc[cnt] = [namesin[i][0], '', '', '']
+        if printform:
+            df.loc[cnt + 1] = [formsin[i][0], '', '', '']
+            cnt += 1
+        df.loc[cnt + 1] = ['Guesser:', 'LSTMTree', 'DcnTree', 'TreeGrad']
+        df.loc[cnt + 2] = [0.000, 'Silence', 'Silence', 'Silence']
+        cnt += 3
+        for j in range(len(all_peaks[i]) - 1):
+            if j == 0:
+                df.loc[cnt] = [all_peaks[i][j]+.1, lstmpredictions[i][j], dtcpredictions[i][j], tgradpredictions[i][j]]
+            else:
+                df.loc[cnt] = [all_peaks[i][j], lstmpredictions[i][j], dtcpredictions[i][j], tgradpredictions[i][j]]
+            cnt += 1
+        df.loc[cnt] = [all_peaks[i][-1], 'End', 'End', 'End']
+        alldf.append(df)
+        cnt += 3
+
+    print(len(alldf))
+
+    if printresults:
+        pd.set_option('display.precision', 3)
+        for i in range(len(alldf)):
+            print(alldf[i].to_string(index=False, header=False), "\n")
+
+    """
+    if printresults:
+        for i in range(len(filenames)):
+            print("\nPerforming predictions on", namesin[i][0])
+            if printform:
+                print(formsin[i][0])
+            print("Guesser:\tLSTMTree\t\t\tDcnTree\t\t\tTreeGrad")
+            print("0.000\tSilence", end="")
+            for j in range(len(all_peaks[i]) - 1):
+                if j == 0:
+                    print(f"\n{'{:.3f}'.format(all_peaks[i][j] + .1)}\t", end="")
+                else:
+                    print(f"\n{'{:.3f}'.format(all_peaks[i][j])}\t", end="")
+                for m in range(len(lstmpredictions[i][j])):
+                    print(lstmpredictions[i][j][m], end="")
+                    if m < len(lstmpredictions[i][j]) - 1:
+                        print(", ", end="")
+                    else:
+                        if len(lstmpredictions[i][j][m]) == 1:
+                            print("\t", end="")
+                print("\t\t\t", end="")
+                for m in range(len(dtcpredictions[i][j])):
+                    print(dtcpredictions[i][j][m], end="")
+                    if m < len(dtcpredictions[i][j]) - 1:
+                        print(", ", end="")
+                    else:
+                        if len(dtcpredictions[i][j][m]) == 1:
+                            print("\t", end="")
+                print("\t\t\t", end="")
+                for m in range(len(tgradpredictions[i][j])):
+                    print(tgradpredictions[i][j][m], end="")
+                    if m < len(tgradpredictions[i][j]) - 1:
+                        print(", ", end="")
+                    else:
+                        if len(tgradpredictions[i][j][m]) == 1:
+                            print("\t", end="")
+                print("\t\t\t", end="")
+            print(f"\n{'{:.3f}'.format(all_peaks[i][-1])}\tEnd")
+    """
     pass
+
 
 # endregion
 
 
-"""===================================================================================="""
+"""=================================================================================================================="""
 
 
 def predictFormAndLabels():
-    """
-    - Call predictLabels and return both labels and form
-    - Display in dataset text-file design form
-    """
-    pass
+    midpath = input("Enter path to folder or audio file: ")
+    predictLabels(midpath, verbose=True, printform=True, printresults=True)
 
 
 if __name__ == '__main__':
@@ -2658,8 +2931,8 @@ if __name__ == '__main__':
     # trainFormModel()
     # predictForm()
 
-    trainLabelModel()
+    # trainLabelModel(retrain=False)
     # predictLabels()
 
-    # predictFormAndLabels()
+    predictFormAndLabels()
     print("\nDone!")

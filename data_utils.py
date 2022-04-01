@@ -1,66 +1,26 @@
-import datetime
-import glob
-import math
 import re
-import time
-from threading import Thread
-import glob as gb
 import librosa
 import matplotlib.pyplot as plt
 import librosa.display
-import pyaudio
-import wave
-from IPython.display import Audio
-from matplotlib.pyplot import specgram
-import pandas as pd
-from sklearn.metrics import confusion_matrix
-import IPython.display as ipd  # To play sound in the notebook
-import os  # interface with underlying OS that python is running on
-import soundfile as sf
-import sys
-import warnings
-from keras.utils.vis_utils import plot_model
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-import tensorflow.keras as keras
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
-from tensorflow.keras.layers import Input, Flatten, Dropout, Activation, BatchNormalization, Dense
-from sklearn.model_selection import GridSearchCV
-from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
-from tensorflow.keras.optimizers import SGD
-from tensorflow.keras.regularizers import l2
-import seaborn as sns
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from tensorflow.keras.utils import to_categorical
-from sklearn.metrics import classification_report
+import os
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-from tensorflow.keras.models import Sequential, load_model
-from sklearn import tree
-from sklearn.dummy import DummyClassifier
-from tensorflow.keras.utils import to_categorical
-from keras.utils import np_utils
 from pydub import AudioSegment
-import keras.layers as kl
-import keras.applications as ka
-import keras.optimizers as ko
-import keras.models as km
 import skimage.measure
 from skimage.transform import resize
 import scipy
 from scipy.spatial import distance
 import librosa.segment
 from sklearn.neighbors import NearestNeighbors
-from sklearn.preprocessing import normalize
 import math
 from scipy import signal
 import numpy as np
-from os import listdir, walk, getcwd, sep
-from numpy import argmax
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import OneHotEncoder
+from numpy import argmax
+from sklearn.preprocessing import normalize
+from matplotlib.pyplot import specgram
+import soundfile as sf
+import seaborn as sns
 
 MASTER_DIR = 'D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis/'
 
@@ -426,13 +386,14 @@ def audiosegment_to_ndarray(audiosegment, getSR=False):
 
 
 # Novelty Function
-def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, returnpeaks=True):
-    # ------------PARAMETERS--------------
-    window_size = 0.209  # sec/frame
+def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, returnpeaks=True, verbose=True):
+    # window_size = 0.209  # sec/frame
     samples_frame = 8192  # samples_frame = math.ceil(window_size*sr)
-    hop_size = 0.139  # sec/frame
+    # hop_size = 0.139  # sec/frame
     hop_length = 6144  # hop_length = math.ceil(hop_size*sr) #overlap 25% (samples/frame)
     sr_desired = 44100
+    if filepath != DEFAULT_FILEPATH:
+        pass
 
     y, sr = librosa.load(filename, sr=None)
 
@@ -440,31 +401,29 @@ def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, re
         y = librosa.core.resample(y, sr, sr_desired)
         sr = sr_desired
 
-    # ------------Fourier Fast Transform-------------
     stft = np.abs(librosa.stft(y, n_fft=samples_frame, hop_length=hop_length))
-    fft_freq = librosa.core.fft_frequencies(sr=sr, n_fft=samples_frame)
+    # fft_freq = librosa.core.fft_frequencies(sr=sr, n_fft=samples_frame)
 
-    """-----------PLOTTING MEL-SPECTROGRAM-------------"""
-    # Spectogram from SFTF
-    librosa.display.specshow(librosa.amplitude_to_db(stft, ref=np.max), y_axis='log', x_axis='frames')
-    plt.title('Power spectrogram')
-    plt.colorbar(format='%+2.0f dB')
-    plt.tight_layout()
-    plt.show()
+    # Plot Mel-Spectogram from SFTF
+    if verbose:
+        librosa.display.specshow(librosa.amplitude_to_db(stft, ref=np.max), y_axis='log', x_axis='frames')
+        plt.title('Power spectrogram')
+        plt.colorbar(format='%+2.0f dB')
+        plt.tight_layout()
+        plt.show()
 
-    # ------------PCP calculation (Chroma)-------------
     chroma = librosa.feature.chroma_stft(S=stft, sr=sr, n_fft=samples_frame, hop_length=hop_length)
 
-    """-----------PLOTTING CHROMAS-------------"""
-    # PCPs or Chroma from spectogram
-    plt.figure(figsize=(10, 4))
-    librosa.display.specshow(chroma, sr=sr, y_axis='chroma', x_axis='frames', cmap="coolwarm")
-    plt.colorbar()
-    plt.title('Chromagram')
-    plt.tight_layout()
-    plt.show()
-    print("Chroma dimensions are: [chroma vectors, N']")
-    print("Chroma dimensions are: [", chroma.shape[0], ",", chroma.shape[1], "]")
+    # Plot PCPs or Chroma from spectogram
+    if verbose:
+        plt.figure(figsize=(10, 4))
+        librosa.display.specshow(chroma, sr=sr, y_axis='chroma', x_axis='frames', cmap="coolwarm")
+        plt.colorbar()
+        plt.title('Chromagram')
+        plt.tight_layout()
+        plt.show()
+        print("Chroma dimensions are: [chroma vectors, N']")
+        print("Chroma dimensions are: [", chroma.shape[0], ",", chroma.shape[1], "]")
 
     # vector x_hat construction. x in Serra's paper is chroma here
     m = round(5 * sr / hop_length)
@@ -479,43 +438,47 @@ def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, re
     N_prime = chroma.shape[1]
     N = N_prime - w
 
-    """PLOTTING x, x_ and the resulting x_hat"""
+    # Plot x, x_ and resulting x_hat
     # x (first chroma)
-    plt.figure(figsize=(15, 7))
-    plt.title('First chroma vector: x[0]')
-    plt.imshow(np.asarray(x[0]), origin='lower', cmap='plasma', aspect=2)
-    plt.show()
+    if verbose:
+        plt.figure(figsize=(15, 7))
+        plt.title('First chroma vector: x[0]')
+        plt.imshow(np.asarray(x[0]), origin='lower', cmap='plasma', aspect=2)
+        plt.show()
 
     # x_
-    plt.figure(figsize=(15, 7))
-    plt.title('x_')
-    plt.imshow(x_, origin='lower', cmap='plasma', aspect=0.5)
-    plt.show()
+    if verbose:
+        plt.figure(figsize=(15, 7))
+        plt.title('x_')
+        plt.imshow(x_, origin='lower', cmap='plasma', aspect=0.5)
+        plt.show()
 
     # x_hat
-    plt.figure(figsize=(15, 7))
-    plt.title('x_hat')
-    plt.imshow(X_hat, origin='lower', cmap='plasma', aspect=0.5)
-    plt.show()
-    print("X_hat dimensions are: [chroma vectors * m (in samples), N'] = [", chroma.shape[0], "*", m, ", N']")
-    print("X_hat dimensions are: [", X_hat.shape[0], ",", X_hat.shape[1], "]")
+    if verbose:
+        plt.figure(figsize=(15, 7))
+        plt.title('x_hat')
+        plt.imshow(X_hat, origin='lower', cmap='plasma', aspect=0.5)
+        plt.show()
+        print("X_hat dimensions are: [chroma vectors * m (in samples), N'] = [", chroma.shape[0], "*", m, ", N']")
+        print("X_hat dimensions are: [", X_hat.shape[0], ",", X_hat.shape[1], "]")
 
-    """PLOTTING RECURRENCE PLOT with Librosa from CHROMAS"""
     # Recurrence matrix from librosa
     recurrence = librosa.segment.recurrence_matrix(chroma, mode='affinity', k=chroma.shape[1])
-    plt.figure(figsize=(7, 7))
-    plt.title('Recurrence matrix from chroma vector from LIBROSA')
-    plt.imshow(recurrence, cmap='gray')
-    plt.show()
+    if verbose:
+        plt.figure(figsize=(7, 7))
+        plt.title('Recurrence matrix from chroma vector from LIBROSA')
+        plt.imshow(recurrence, cmap='gray')
+        plt.show()
 
     # Plot recurrence matrix of vector x with librosa
     recurrence2 = librosa.segment.recurrence_matrix(x, k=14, sym=True)
-    plt.figure(figsize=(7, 7))
-    plt.title('Recurrence matrix of x vector with k=13 neighbors from LIBROSA')
-    plt.imshow(1 - recurrence2, cmap='gray')
-    plt.show()
+    if verbose:
+        plt.figure(figsize=(7, 7))
+        plt.title('Recurrence matrix of x vector with k=13 neighbors from LIBROSA')
+        plt.imshow(1 - recurrence2, cmap='gray')
+        plt.show()
 
-    # ------------K-Nearest-Neighboors-------------
+    # KNN
     K = 14  # K = round(N*0.03)
     nbrs = NearestNeighbors(n_neighbors=K).fit(X_hat.T)
     distances, indices = nbrs.kneighbors(X_hat.T)
@@ -525,22 +488,21 @@ def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, re
             if (i in indices[j]) and (j in indices[i]) and (i != j):
                 R[i, j] = 1
 
-    """PLOTTING RECURRENCE PLOT"""
     # Plot recurrence matrix of vector R (same as above)
-    plt.figure(figsize=(7, 7))
-    plt.title('Recurrence matrix R')
-    plt.imshow(1 - R, cmap='gray')
-    plt.show()
+    if verbose:
+        plt.figure(figsize=(7, 7))
+        plt.title('Recurrence matrix R')
+        plt.imshow(1 - R, cmap='gray')
+        plt.show()
 
-    # ------------Lag matrix construction-------------
     L = librosa.segment.recurrence_to_lag(R, pad=False)  # None
 
-    """PLOTTING LAG MATRIX"""
     # Lag Matrix calculated from R
-    plt.figure(figsize=(7, 7))
-    plt.title('Lag Matrix')
-    plt.imshow(1 - L, cmap='gray')
-    plt.show()
+    if verbose:
+        plt.figure(figsize=(7, 7))
+        plt.title('Lag Matrix')
+        plt.imshow(1 - L, cmap='gray')
+        plt.show()
 
     # Smoothing signal with Gaussian windows of 30 samples length
     s1 = round(0.3 * sr / hop_length)
@@ -551,58 +513,59 @@ def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, re
     gt = signal.gaussian(st, std=sigmat).reshape(st, 1)  # gt in paper
     G = np.matmul(g1, gt.T)
 
-    """PLOTTING GAUSSIAN WINDOW"""
     # Plot Gaussian window
-    plt.plot(gt)
-    plt.title("Gaussian window ($\sigma$=7)")
-    plt.ylabel("Amplitude")
-    plt.xlabel("Sample")
-    plt.show()
+    if verbose:
+        plt.plot(gt)
+        plt.title("Gaussian window ($\sigma$=7)")
+        plt.ylabel("Amplitude")
+        plt.xlabel("Sample")
+        plt.show()
 
-    """PLOTTING G"""
     # Gaussian kernel G
-    plt.figure(figsize=(7, 7))
-    plt.title('Gaussian kernel G')
-    plt.imshow(1 - G, origin='lower', cmap='gray', aspect=40)
-    plt.show()
+    if verbose:
+        plt.figure(figsize=(7, 7))
+        plt.title('Gaussian kernel G')
+        plt.imshow(1 - G, origin='lower', cmap='gray', aspect=40)
+        plt.show()
 
     # Applyin gaussian filter to Lag matrix
     P = signal.convolve2d(L, G, mode='same')
 
-    """PLOTTING MATRICES after GAUSSIAN SMOOTHING"""
     # Plot R matrix after Gaussian smoothing
     P2 = librosa.segment.lag_to_recurrence(P, axis=-1)
-    plt.figure(figsize=(7, 7))
-    plt.title('Recurrence matrix R after gaussian')
-    plt.imshow(1 - P2, cmap='gray')
-    plt.show()
+    if verbose:
+        plt.figure(figsize=(7, 7))
+        plt.title('Recurrence matrix R after gaussian')
+        plt.imshow(1 - P2, cmap='gray')
+        plt.show()
 
     # Plot Lag matrix after Gaussian smoothing
-    plt.figure(figsize=(7, 7))
-    plt.title('Lag matrix L after gaussian')
-    plt.imshow(1 - P, cmap='gray')
-    plt.show()
+    if verbose:
+        plt.figure(figsize=(7, 7))
+        plt.title('Lag matrix L after gaussian')
+        plt.imshow(1 - P, cmap='gray')
+        plt.show()
 
     # Novelty curve
     c = np.linalg.norm(P[:, 1:] - P[:, 0:-1], axis=0)
     c_norm = (c - c.min()) / (c.max() - c.min())  # normalization of c
 
-    """PLOTTING NOVELTY CURVE"""
     # Plot novelty function with boundaries
     frames = range(len(c_norm))
-    plt.figure(figsize=(10, 4))
-    plt.title('Novelty function vector c')
-    plt.xlabel('Frames')
-    plt.plot(frames, c_norm)
-    plt.show()
+    if verbose:
+        plt.figure(figsize=(10, 4))
+        plt.title('Novelty function vector c')
+        plt.xlabel('Frames')
+        plt.plot(frames, c_norm)
+        plt.show()
 
     # Peaks detection - sliding window
     delta = 0.05  # threshold
     lamda = round(6 * sr / hop_length)  # window length
     peaks_position = signal.find_peaks(c_norm, height=delta, distance=lamda, width=round(0.5 * sr / hop_length))[
         0]  # array of peaks
-    peaks_values = signal.find_peaks(c_norm, height=delta, distance=lamda, width=round(0.5 * sr / hop_length))[1][
-        'peak_heights']  # array of peaks
+    # peaks_values = signal.find_peaks(c_norm, height=delta, distance=lamda, width=round(0.5 * sr / hop_length))[1][
+    #     'peak_heights']  # array of peaks
     b = peaks_position
     # Adding elements 1 and N' to the begining and end of the arrray
     if len(b) == 0 or b[0] != 0:
@@ -610,16 +573,16 @@ def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, re
     if b[-1] != N_prime - 1:
         b = np.concatenate([b, [N - 1]])
 
-    """PLOTTING NOVELTY CURVE"""
     # Plot novelty function with boundaries
     frames = range(len(c_norm))
-    plt.figure(figsize=(10, 4))
-    plt.title('Novelty function vector c (red lines are peaks)')
-    plt.xlabel('Frames')
-    for i in range(len(b)):
-        plt.axvline(b[i], color='r', linestyle='--')
-    plt.plot(frames, c_norm)
-    plt.show()
+    if verbose:
+        plt.figure(figsize=(10, 4))
+        plt.title('Novelty function vector c (red lines are peaks)')
+        plt.xlabel('Frames')
+        for i in range(len(b)):
+            plt.axvline(b[i], color='r', linestyle='--')
+        plt.plot(frames, c_norm)
+        plt.show()
 
     if returnpeaks:
         peaktimes = []
@@ -646,7 +609,6 @@ def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, re
 
             Q[b[u]:b[u + 1], b[v]:b[v + 1]] = Q_uv
 
-    """PLOTTING CUMULATIVE MATRIX"""
     # Cumulative matrix plot
     plt.figure(figsize=(7, 7))
     plt.title('Cumulative matrix Q')
@@ -660,7 +622,6 @@ def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, re
         for v in range(b.shape[0] - 1):
             S[u, v] = np.max(Q[b[u]:b[u + 1], b[v]:b[v + 1]]) / min(b[u + 1] - b[u], b[v + 1] - b[v])
 
-    """PLOTTING SEGMENT SIMILARITY MATRIX"""
     # Plot Segment similarity matrix S
     plt.figure(figsize=(7, 7))
     plt.title('Segment matrix S')
@@ -678,15 +639,13 @@ def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, re
         S_hat_norm = np.matmul(S_hat, S_hat)
         S_hat_norm = S_hat_norm >= 1
 
-    """PLOTTING TRANSITIVE BINARY SIMILARITY MATRIX"""
     # Plot transitive binary similarity matrix S_hat
     plt.figure(figsize=(7, 7))
     plt.title('Segment transitive binary similarity matrix S_hat')
     plt.imshow(1 - S_hat_norm, cmap='gray')
     plt.show()
 
-    # Image vs ground truth
-    """PLOTTING S with LABELS"""
+    # Image vs ground truth - Plot S with labels
     S_frames = np.zeros_like(Q)
     for u in range(b.shape[0] - 1):
         for v in range(b.shape[0] - 1):
@@ -722,20 +681,19 @@ def peak_picking(filename, name="", foldername="", filepath=DEFAULT_FILEPATH, re
     plt.close(fig)
     del ax, fig
 
-    """PLOTTING NOVELTY CURVE"""
     # Plot novelty function with boundaries
     frames = range(len(c_norm))
     plt.figure(figsize=(10, 4))
     plt.title('Novelty function vector c (red lines are peaks and black lines are labels)')
     plt.xlabel('Frames')
     timeDifs = []
-    dbltb = "\t\t"
-    nspc = ""
+    # dbltb = "\t\t"
+    # nspc = ""
     for i in range(len(array)):
         plt.axvline(array[i] * sr / hop_length, color='black', linestyle='-')
     for i in range(len(b)):
         plt.axvline(b[i], color='r', linestyle='--')
-        timeSecondsDecimal = b[i] / sr * hop_length
+        # timeSecondsDecimal = b[i] / sr * hop_length
         """ 
         # DEMO EVENT COMPARISON
         timeStr = str(datetime.timedelta(seconds=timeSecondsDecimal))
