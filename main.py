@@ -1,21 +1,12 @@
-import datetime
-import glob
 import itertools
-import math
-import re
 import time
 import glob as gb
 import librosa
 import matplotlib.pyplot as plt
 import librosa.display
-import pyaudio
-import wave
 import pickle
-import torch
-from matplotlib.pyplot import specgram
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.metrics import confusion_matrix, accuracy_score, multilabel_confusion_matrix
+from sklearn.metrics import confusion_matrix, accuracy_score
 import os
 import soundfile as sf
 import sys
@@ -25,45 +16,24 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import tensorflow.keras as keras
 from sklearn.svm import LinearSVC
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
-from tensorflow.keras.layers import Input, Flatten, Dropout, Activation, BatchNormalization, Dense
-from sklearn.model_selection import GridSearchCV
-from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
-from tensorflow.keras.optimizers import SGD
-from tensorflow.keras.regularizers import l1, l2, l1_l2
+from tensorflow.keras.layers import Input
+from tensorflow.keras.regularizers import l2, l1_l2
 import seaborn as sns
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from tensorflow.keras.utils import to_categorical
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.metrics import classification_report, roc_curve, roc_auc_score, auc
+from sklearn.metrics import classification_report
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 import statistics
-from tensorflow.keras.models import Sequential, load_model
 from sklearn import tree
 from sklearn.dummy import DummyClassifier
 from tensorflow.keras.utils import to_categorical
-from keras.utils import np_utils
-from pydub import AudioSegment
+from tensorflow.keras.models import Sequential
 import random
-import tensorflow.keras.layers as kl
-import tensorflow.keras.applications as ka
-import tensorflow.keras.optimizers as ko
-import tensorflow.keras.models as km
-import skimage.measure
-import scipy
-from scipy.spatial import distance
 from numpy import inf
 import audioread
 import librosa.segment
-from sklearn.neighbors import NearestNeighbors
-from sklearn.preprocessing import normalize
-import math
-from scipy import signal
 import numpy as np
-from os import listdir, walk, getcwd, sep
 import data_utils as du
 import data_utils_input as dus
 from data_utils_input import normalize_image, padding_MLS, padding_SSLM, borders
@@ -71,26 +41,59 @@ from keras import backend as k
 from shutil import copyfile
 import fnmatch
 from sklearn import preprocessing
-import hyperas
-from hyperopt import Trials, STATUS_OK, tpe
-from hyperas.distributions import choice, uniform
 from sklearn.feature_selection import SelectKBest
 from sklearn.feature_selection import f_classif
 from ast import literal_eval
 from sklearn.feature_selection import RFE
 from skimage.transform import resize
-import autokeras as ak
-from djinn import djinn
 from tensorflow.python.ops.init_ops_v2 import glorot_uniform
+import lightgbm as lgb
+from treegrad import TGDClassifier
+from sklearn.preprocessing import MultiLabelBinarizer
+import logging
 # import tensorflow_decision_forests as tfdf  # linux only
 from tensorflow.keras.layers.experimental import RandomFourierFeatures
 from XBNet.training_utils import training, predict
 from XBNet.models import XBNETClassifier
 from XBNet.run import run_XBNET
-import lightgbm as lgb
-from treegrad import TGDClassifier
-from sklearn.preprocessing import MultiLabelBinarizer
-import logging
+import autokeras as ak
+from djinn import djinn
+import hyperas
+from hyperopt import Trials, STATUS_OK, tpe
+from hyperas.distributions import choice, uniform
+from os import listdir, walk, getcwd, sep
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import normalize
+import math
+from scipy import signal
+import tensorflow.keras.layers as kl
+import tensorflow.keras.applications as ka
+import tensorflow.keras.optimizers as ko
+import tensorflow.keras.models as km
+import skimage.measure
+import scipy
+from scipy.spatial import distance
+from tensorflow.keras.layers import Flatten, Dropout, Activation, BatchNormalization, Dense
+from sklearn.model_selection import GridSearchCV
+from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
+from tensorflow.keras.optimizers import SGD
+from sklearn.preprocessing import OneHotEncoder
+from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
+from tensorflow.keras.regularizers import l1
+from keras.utils import np_utils
+from pydub import AudioSegment
+from tensorflow.keras.models import load_model
+from sklearn.metrics import roc_curve, roc_auc_score, auc
+import datetime
+import glob
+import math
+import re
+import pyaudio
+import wave
+import torch
+from matplotlib.pyplot import specgram
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.metrics import multilabel_confusion_matrix
 
 tf.get_logger().setLevel(logging.ERROR)
 k.set_image_data_format('channels_last')
