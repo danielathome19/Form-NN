@@ -1933,7 +1933,7 @@ def prepare_augmented_audio(inpath=FULL_DIR, savepath='', augmentation=1):
                 y = inject_noise(y, 0.02)
             elif augmentation == 5:
                 y = shift_speed(y, 1.1)
-                y = shift_pitch(y, sr, 1)  # Shift up major 7th
+                y = shift_pitch(y, sr, 1)  # Shift up minor 2nd
                 y = shift_time(y, sr, random.random(), 'right')
                 y = inject_noise(y, 0.007)
             sf.write(augdatapath, y, sr)
