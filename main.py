@@ -1017,9 +1017,6 @@ def oldWorkingtrainFormModel():
     print("Decision tree accuracy:", clf.score(X_test, y_test))
 
     """ FEATURE TUNING """
-    # https://curiousily.com/posts/hackers-guide-to-fixing-underfitting-and-overfitting-models/
-    # https://towardsdatascience.com/handling-overfitting-in-deep-learning-models-c760ee047c6e
-    # https://machinelearningmastery.com/rfe-feature-selection-in-python/
     selector = SelectKBest(f_classif, k=15)  # 1000 if using RFE
     Z_train = selector.fit_transform(X_train, old_y_train)
     skb_values = selector.get_support()
@@ -1047,7 +1044,6 @@ def oldWorkingtrainFormModel():
 
     # """
     # Accuracy 0.211, stick with SKB? Gives good loss though
-    # https://towardsdatascience.com/dont-overfit-how-to-prevent-overfitting-in-your-deep-learning-models-63274e552323
     clf = LinearSVC(C=0.01, penalty="l1", dual=False)
     clf.fit(X_train, old_y_train)
     rfe_selector = RFE(clf, 15, verbose=5)
@@ -1943,10 +1939,6 @@ def prepare_augmented_audio(inpath=FULL_DIR, savepath='', augmentation=1):
 
 
 def generate_augmented_datasets():
-    # https://www.kaggle.com/CVxTz/audio-data-augmentation
-    # https://towardsdatascience.com/
-    #   audio-deep-learning-made-simple-part-3-data-preparation-and-augmentation-24c6e1f6b52
-    # https://medium.com/@makcedward/data-augmentation-for-audio-76912b01fdf6
     for i in range(1, 6):
         prepare_augmented_audio(savepath=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/MIDI/'), augmentation=i)
         dus.util_main(feature="mls", inpath=os.path.join(MASTER_INPUT_DIR, 'Aug' + str(i) + '/'),
@@ -2083,9 +2075,6 @@ def trainFormModel():
     print("Decision tree accuracy:", clf.score(X_test, y_test))
 
     """ FEATURE TUNING """
-    # https://curiousily.com/posts/hackers-guide-to-fixing-underfitting-and-overfitting-models/
-    # https://towardsdatascience.com/handling-overfitting-in-deep-learning-models-c760ee047c6e
-    # https://machinelearningmastery.com/rfe-feature-selection-in-python/
     selector = SelectKBest(f_classif, k=15)  # 1000 if using RFE
     Z_train = selector.fit_transform(X_train, old_y_train)
     skb_values = selector.get_support()
@@ -2113,7 +2102,6 @@ def trainFormModel():
 
     # """
     # Accuracy 0.211, stick with SKB? Gives good loss though
-    # https://towardsdatascience.com/dont-overfit-how-to-prevent-overfitting-in-your-deep-learning-models-63274e552323
     clf = LinearSVC(C=0.01, penalty="l1", dual=False)
     clf.fit(X_train, old_y_train)
     rfe_selector = RFE(clf, 15, verbose=5)
