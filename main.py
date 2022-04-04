@@ -2373,9 +2373,9 @@ def get_split_spectrograms(valid_only=True):
                 durations.append(abs(float(Xt[idx + 1] - Xt[idx])))
         spectrograms = []
         for asplit in audio_splits:
-            # mel_spec = librosa.feature.melspectrogram(y=asplit, sr=sr)
-            mel_spec = librosa.feature.mfcc(y=asplit, sr=sr,
-                                            n_mfcc=20, dct_type=2, norm='ortho', lifter=0, hop_length=4096, n_fft=819)
+            mel_spec = librosa.feature.melspectrogram(y=asplit, sr=sr)
+            # mel_spec = librosa.feature.mfcc(y=asplit, sr=sr,
+            #                                 n_mfcc=20, dct_type=2, norm='ortho', lifter=0, hop_length=4096, n_fft=819)
             spectrograms.append(np.mean(mel_spec, axis=0))
             """
             plt.figure(figsize=(10, 4))
@@ -2676,7 +2676,10 @@ def predictLabels(midpath=None, verbose=True, printform=False, printresults=True
         raise FileNotFoundError("Path not found or does not exist.")
     else:
         if os.path.isfile(midpath):
-            all_peaks.append(du.peak_picking(midpath, returnpeaks=True, verbose=False))
+            peaks = du.peak_picking(midpath, returnpeaks=True, verbose=False)
+            if len(peaks) == 2:
+                peaks = np.insert(peaks, 1, peaks[-1] / 2)
+            all_peaks.append(peaks)
             filenames.append(midpath)
         elif os.path.isdir(midpath):
             if midpath[-1] != "\\" or midpath[-1] != "/":
@@ -2695,7 +2698,10 @@ def predictLabels(midpath=None, verbose=True, printform=False, printresults=True
                         if verbose:
                             print("Reading file #" + str(cnt + 1))
                         mid_path = mid_dirpath + f
-                        all_peaks.append(du.peak_picking(mid_path, returnpeaks=True, verbose=False))
+                        peaks = du.peak_picking(mid_path, returnpeaks=True, verbose=False)
+                        if len(peaks) == 2:
+                            peaks = np.insert(peaks, 1, peaks[-1]/2)
+                        all_peaks.append(peaks)
                         filenames.append(mid_path)
                         cnt += 1
         else:
@@ -2800,7 +2806,6 @@ def predictLabels(midpath=None, verbose=True, printform=False, printresults=True
     # model.summary()
     feature_vectors_model = keras.models.Model(model.input, model.get_layer('time_distributed').output)
     X_ext = feature_vectors_model.predict(X_test)[:, :, 0]
-    # with open('lstmtree_phrase_model_save_best.pkl', 'rb') as f:
     with open('lstmtree_phrase_model_save_best.pkl', 'rb') as f:
         dtc = pickle.load(f)
     dtc_y_pred = dtc.predict(X_ext)
