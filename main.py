@@ -1484,13 +1484,13 @@ def old_predictForm():
                 else:
                     midpath = midpath + "/"
             cnt = 0
-            audio_extenions = ["3gp", "aa", "aac", "aax", "act", "aiff", "alac", "amr", "ape", "au", "awb", "dct",
-                               "dss", "dvf", "flac", "gsm", "iklax", "ivs", "m4a", "m4b", "m4p", "mmf", "mp3", "mpc",
-                               "msv", "nmf", "ogg", "oga", "mogg", "opus", "ra", "rm", "raw", "rf64", "sln", "tta",
-                               "voc", "vox", "wav", "wma", "wv", "webm", "8svx", "cda", "mid", "midi", "mp4"]
+            audio_extensions = ["3gp", "aa", "aac", "aax", "act", "aiff", "alac", "amr", "ape", "au", "awb", "dct",
+                                "dss", "dvf", "flac", "gsm", "iklax", "ivs", "m4a", "m4b", "m4p", "mmf", "mp3", "mpc",
+                                "msv", "nmf", "ogg", "oga", "mogg", "opus", "ra", "rm", "raw", "rf64", "sln", "tta",
+                                "voc", "vox", "wav", "wma", "wv", "webm", "8svx", "cda", "mid", "midi", "MID" "mp4"]
             for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(midpath):
                 for f in mid_filenames:
-                    if f.endswith(tuple(audio_extenions)):
+                    if f.endswith(tuple(audio_extensions)):
                         print("Reading file #" + str(cnt + 1))
                         mid_path = mid_dirpath + f
                         df2t = old_preparePredictionData(mid_path, savetoexcel=False)
@@ -2235,13 +2235,13 @@ def predictForm(midpath=None, verbose=True):
                 else:
                     midpath = midpath + "/"
             cnt = 0
-            audio_extenions = ["3gp", "aa", "aac", "aax", "act", "aiff", "alac", "amr", "ape", "au", "awb", "dct",
-                               "dss", "dvf", "flac", "gsm", "iklax", "ivs", "m4a", "m4b", "m4p", "mmf", "mp3", "mpc",
-                               "msv", "nmf", "ogg", "oga", "mogg", "opus", "ra", "rm", "raw", "rf64", "sln", "tta",
-                               "voc", "vox", "wav", "wma", "wv", "webm", "8svx", "cda", "mid", "midi", "mp4"]
+            audio_extensions = ["3gp", "aa", "aac", "aax", "act", "aiff", "alac", "amr", "ape", "au", "awb", "dct",
+                                "dss", "dvf", "flac", "gsm", "iklax", "ivs", "m4a", "m4b", "m4p", "mmf", "mp3", "mpc",
+                                "msv", "nmf", "ogg", "oga", "mogg", "opus", "ra", "rm", "raw", "rf64", "sln", "tta",
+                                "voc", "vox", "wav", "wma", "wv", "webm", "8svx", "cda", "mid", "midi", "MID", "mp4"]
             for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(midpath):
                 for f in mid_filenames:
-                    if f.endswith(tuple(audio_extenions)):
+                    if f.endswith(tuple(audio_extensions)):
                         if verbose:
                             print("Reading file #" + str(cnt + 1))
                         mid_path = mid_dirpath + f
@@ -2676,13 +2676,13 @@ def predictLabels(midpath=None, verbose=True, printform=False, printresults=True
                 else:
                     midpath = midpath + "/"
             cnt = 0
-            audio_extenions = ["3gp", "aa", "aac", "aax", "act", "aiff", "alac", "amr", "ape", "au", "awb", "dct",
-                               "dss", "dvf", "flac", "gsm", "iklax", "ivs", "m4a", "m4b", "m4p", "mmf", "mp3", "mpc",
-                               "msv", "nmf", "ogg", "oga", "mogg", "opus", "ra", "rm", "raw", "rf64", "sln", "tta",
-                               "voc", "vox", "wav", "wma", "wv", "webm", "8svx", "cda", "mid", "midi", "mp4"]
+            audio_extensions = ["3gp", "aa", "aac", "aax", "act", "aiff", "alac", "amr", "ape", "au", "awb", "dct",
+                                "dss", "dvf", "flac", "gsm", "iklax", "ivs", "m4a", "m4b", "m4p", "mmf", "mp3", "mpc",
+                                "msv", "nmf", "ogg", "oga", "mogg", "opus", "ra", "rm", "raw", "rf64", "sln", "tta",
+                                "voc", "vox", "wav", "wma", "wv", "webm", "8svx", "cda", "mid", "midi", "MID", "mp4"]
             for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(midpath):
                 for f in mid_filenames:
-                    if f.endswith(tuple(audio_extenions)):
+                    if f.endswith(tuple(audio_extensions)):
                         if verbose:
                             print("Reading file #" + str(cnt + 1))
                         mid_path = mid_dirpath + f

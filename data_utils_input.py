@@ -604,13 +604,13 @@ class BuildMIDIloader(k.utils.Sequence):
         print("Building dataloader for " + self.midi_path)
         df = get_midi_dataframe(building_df)
         cnt = 1
-        audio_extenions = ["3gp", "aa", "aac", "aax", "act", "aiff", "alac", "amr", "ape", "au", "awb", "dct",
-                           "dss", "dvf", "flac", "gsm", "iklax", "ivs", "m4a", "m4b", "m4p", "mmf", "mp3", "mpc",
-                           "msv", "nmf", "ogg", "oga", "mogg", "opus", "ra", "rm", "raw", "rf64", "sln", "tta",
-                           "voc", "vox", "wav", "wma", "wv", "webm", "8svx", "cda", "mid", "midi", "mp4"]
+        audio_extensions = ["3gp", "aa", "aac", "aax", "act", "aiff", "alac", "amr", "ape", "au", "awb", "dct",
+                            "dss", "dvf", "flac", "gsm", "iklax", "ivs", "m4a", "m4b", "m4p", "mmf", "mp3", "mpc",
+                            "msv", "nmf", "ogg", "oga", "mogg", "opus", "ra", "rm", "raw", "rf64", "sln", "tta",
+                            "voc", "vox", "wav", "wma", "wv", "webm", "8svx", "cda", "mid", "midi", "MID", "mp4"]
         for (mid_dirpath, mid_dirnames, mid_filenames) in os.walk(self.midi_path):
             for f in mid_filenames:
-                if f.endswith(tuple(audio_extenions)):
+                if f.endswith(tuple(audio_extensions)):
                     self.songs_list.append(os.path.splitext(f)[0])
                     print("Reading file #" + str(cnt))
                     mid_path = mid_dirpath + f
