@@ -919,7 +919,7 @@ def formnn_cnn(input_dim_1, filters=8, lrval=0.0001, numclasses=12, kernelsize=3
 
 def oldWorkingtrainFormModel():
     # region DataPreProcessing
-    df = pd.read_excel(os.path.join(MASTER_DIR, 'full_augmented_dataset.xlsx'))
+    df = pd.read_excel(os.path.join(MASTER_DIR, 'Data/full_augmented_dataset.xlsx'))
     # df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))
     names = df[['piece_name', 'composer', 'filename']]
     y = df['formtype']
@@ -1953,7 +1953,7 @@ def generate_augmented_datasets():
     df4 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug4.xlsx'))
     df5 = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset_aug5.xlsx'))
     df = pd.concat([df, df1, df2, df3, df4, df5], ignore_index=True).reset_index()
-    df.to_excel(os.path.join(MASTER_DIR, 'full_augmented_dataset.xlsx'), index=False)
+    df.to_excel(os.path.join(MASTER_DIR, 'Data/full_augmented_dataset.xlsx'), index=False)
 
 
 def prepare_lstm_peaks():
@@ -1977,7 +1977,7 @@ def prepare_lstm_peaks():
 # region FormModel
 def trainFormModel():
     # region DataPreProcessing
-    df = pd.read_excel(os.path.join(MASTER_DIR, 'full_augmented_dataset.xlsx'))
+    df = pd.read_excel(os.path.join(MASTER_DIR, 'Data/full_augmented_dataset.xlsx'))
     # df = pd.read_excel(os.path.join(MASTER_DIR, 'full_dataset.xlsx'))
     names = df[['piece_name', 'composer', 'filename']]
     y = df['formtype']
