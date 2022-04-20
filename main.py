@@ -112,6 +112,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 MASTER_DIR = 'D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis/'
 MASTER_INPUT_DIR = 'F:/Master Thesis Input/'
 MASTER_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/')
+WEIGHT_DIR = os.path.join(MASTER_DIR, 'Weights/')
 
 MIDI_Data_Dir = np.array(gb.glob(os.path.join(MASTER_DIR, 'Data/MIDIs/*')))
 FULL_DIR = os.path.join(MASTER_INPUT_DIR, 'Full/')
@@ -1548,7 +1549,7 @@ def old_predictForm():
     y_test = np.array(y_test)
 
     label_encoder = LabelEncoder()
-    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
+    label_encoder.classes_ = np.load(os.path.join(WEIGHT_DIR, 'form_classes.npy'))
 
     skb_values = np.load(os.path.join(MASTER_DIR, "selectkbest_indicies.npy"))
     kbest_indicies = np.argwhere(skb_values == True)
@@ -1834,7 +1835,7 @@ def create_form_dataset(filedir=FULL_DIR, labeldir=FULL_LABELPATH, outfile='full
 
     df = get_column_dataframe()
     label_encoder = LabelEncoder()
-    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
+    label_encoder.classes_ = np.load(os.path.join(WEIGHT_DIR, 'form_classes.npy'))
     for indx, cur_data in enumerate(full_datagen):
         if indx == len(mls_full):
             break
@@ -2079,7 +2080,7 @@ def trainFormModel():
     Z_train = selector.fit_transform(X_train, old_y_train)
     skb_values = selector.get_support()
     Z_test = X_test[:, skb_values]
-    np.save(os.path.join(MASTER_DIR, "selectkbest_indices.npy"), skb_values)
+    np.save(os.path.join(WEIGHT_DIR, "selectkbest_indices.npy"), skb_values)
     print(Z_train.shape)
     print(Z_test.shape)
     """
@@ -2181,9 +2182,9 @@ def trainFormModel():
     plt.savefig('TreeGrad_Classification_Report.png')
     plt.show()
 
-    with open('treegrad_model_save.pkl', 'wb') as f:
+    with open(os.path.join(WEIGHT_DIR, 'treegrad_model_save.pkl'), 'wb') as f:
         pickle.dump(model, f)
-    with open('treegrad_model_save.pkl', 'rb') as f:
+    with open(os.path.join(WEIGHT_DIR, 'treegrad_model_save.pkl'), 'rb') as f:
         model2 = pickle.load(f)
     acc = accuracy_score(int_y_test, model2.predict(X_test))
     print('TreeGrad Deep Neural Decision Forest accuracy from save: ', acc)
@@ -2298,12 +2299,12 @@ def predictForm(midpath=None, verbose=True):
     X_test_names = np.array(X_test_names)
 
     label_encoder = LabelEncoder()
-    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
-    skb_values = np.load(os.path.join(MASTER_DIR, "selectkbest_indices.npy"))
+    label_encoder.classes_ = np.load(os.path.join(WEIGHT_DIR, 'form_classes.npy'))
+    skb_values = np.load(os.path.join(WEIGHT_DIR, "selectkbest_indices.npy"))
     # kbest_indices = np.argwhere(skb_values == True)
     X_test = X_test[:, skb_values]
 
-    with open('treegrad_model_save_best.pkl', 'rb') as f:
+    with open(os.path.join(WEIGHT_DIR, 'treegrad_model_save_best.pkl'), 'rb') as f:
         model = pickle.load(f)
     result = model.predict(X_test)
 
@@ -2494,7 +2495,7 @@ def trainLabelModel(retrain=True):
     """
 
     df, label_encoder = get_label_dataset(valid_only=True)
-    np.save(os.path.join(MASTER_DIR, 'label_classes.npy'), label_encoder.classes_)
+    np.save(os.path.join(WEIGHT_DIR, 'label_classes.npy'), label_encoder.classes_)
     # Maybe drop 'form' column unless it decreases accuracy? Seems to work better with it though
     X_train = df.iloc[:, :-1]
     y_train = df.iloc[:, -1]
@@ -2510,7 +2511,7 @@ def trainLabelModel(retrain=True):
     mlb = MultiLabelBinarizer()
     # y_train = to_categorical(int_y_train)
     y_train = mlb.fit_transform(int_y_train)
-    np.save(os.path.join(MASTER_DIR, 'label_mlb_classes.npy'), mlb.classes_)
+    np.save(os.path.join(WEIGHT_DIR, 'label_mlb_classes.npy'), mlb.classes_)
 
     """ BASE MODEL """
     dummy_clf = DummyClassifier(strategy="stratified")
@@ -2523,7 +2524,7 @@ def trainLabelModel(retrain=True):
     clf = clf.fit(X_train, y_train)
     clf.predict_proba(X_train)
     print("Decision tree accuracy:", clf.score(X_train, y_train))
-    with open('dcntree_phrase_model_save.pkl', 'wb') as f:
+    with open(os.path.join(WEIGHT_DIR, 'dcntree_phrase_model_save.pkl'), 'wb') as f:
         pickle.dump(clf, f)
 
     """
@@ -2541,21 +2542,21 @@ def trainLabelModel(retrain=True):
     if not os.path.isfile(os.path.join(MASTER_DIR, 'FormNN_LSTM_Model_Diagram.png')):
         plot_model(model, to_file=os.path.join(MASTER_DIR, 'FormNN_LSTM_Model_Diagram.png'),
                    show_shapes=True, show_layer_names=True, expand_nested=True, dpi=300)
-    checkpoint = ModelCheckpoint("best_label_model.hdf5", monitor='accuracy', verbose=0,
+    checkpoint = ModelCheckpoint(os.path.join(WEIGHT_DIR, "best_label_model.hdf5"), monitor='accuracy', verbose=0,
                                  save_best_only=False, mode='max', save_freq='epoch', save_weights_only=True)
     X_train = X_train[:, :, np.newaxis]
     if retrain:
         model.fit(X_train, y_train, epochs=5, batch_size=1, callbacks=[checkpoint])
     else:
-        if not os.path.isfile(os.path.join(MASTER_DIR, 'best_label_model.hdf5')):
+        if not os.path.isfile(os.path.join(WEIGHT_DIR, 'best_label_model.hdf5')):
             model.fit(X_train, y_train, epochs=10, batch_size=1, callbacks=[checkpoint])
-        model.load_weights('best_label_model.hdf5')
+        model.load_weights(os.path.join(WEIGHT_DIR, 'best_label_model.hdf5'))
     feature_vectors_model = keras.models.Model(model.input, model.get_layer('time_distributed').output)
     X_ext = feature_vectors_model.predict(X_train)[:, :, 0]
 
     dtc = tree.DecisionTreeClassifier()
     dtc.fit(X_ext, y_train)
-    with open('lstmtree_phrase_model_save.pkl', 'wb') as f:
+    with open(os.path.join(WEIGHT_DIR, 'lstmtree_phrase_model_save.pkl'), 'wb') as f:
         pickle.dump(dtc, f)
     dtc_y_pred = dtc.predict(X_ext)
     dtc_score = dtc.score(X_ext, y_train)
@@ -2622,7 +2623,7 @@ def trainLabelModel(retrain=True):
     plt.savefig('TreeGrad_Phrase_Feature_Importance.png')
     plt.show()
 
-    with open('treegrad_phrase_model_save.pkl', 'wb') as f:
+    with open(os.path.join(WEIGHT_DIR, 'treegrad_phrase_model_save.pkl'), 'wb') as f:
         pickle.dump(model, f)
 
     """
@@ -2729,7 +2730,7 @@ def predictLabels(midpath=None, verbose=True, printform=False, printresults=True
             print("Finished file #" + str(i + 1))
 
     label_encoder_form = LabelEncoder()
-    label_encoder_form.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
+    label_encoder_form.classes_ = np.load(os.path.join(WEIGHT_DIR, 'form_classes.npy'))
     df = pd.DataFrame(columns=['form', 'timestamps', 'durations', 'mel_splits'])
     mel_splits = []
     for i in range(len(filenames)):
@@ -2770,7 +2771,7 @@ def predictLabels(midpath=None, verbose=True, printform=False, printresults=True
     if verbose:
         print("Done processing files, building data set...\n")
     label_encoder = LabelEncoder()
-    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'label_classes.npy'))
+    label_encoder.classes_ = np.load(os.path.join(WEIGHT_DIR, 'label_classes.npy'))
     X_test = df2
     if X_test.shape[1] <= 1341:  # Match shape to training data
         t_cnt = 0
@@ -2786,15 +2787,15 @@ def predictLabels(midpath=None, verbose=True, printform=False, printresults=True
     X_test = np.array(X_test)
 
     mlb = MultiLabelBinarizer()
-    mlb.classes_ = np.load(os.path.join(MASTER_DIR, 'label_mlb_classes.npy'), allow_pickle=True)
+    mlb.classes_ = np.load(os.path.join(WEIGHT_DIR, 'label_mlb_classes.npy'), allow_pickle=True)
     model = formnn_label_lstm(mlb)
     X_test = X_test[:, :, np.newaxis]
     # print(X_test)
-    model.load_weights('best_label_model.hdf5')
+    model.load_weights(os.path.join(WEIGHT_DIR, 'best_label_model.hdf5'))
     # model.summary()
     feature_vectors_model = keras.models.Model(model.input, model.get_layer('time_distributed').output)
     X_ext = feature_vectors_model.predict(X_test)[:, :, 0]
-    with open('lstmtree_phrase_model_save_best.pkl', 'rb') as f:
+    with open(os.path.join(WEIGHT_DIR, 'lstmtree_phrase_model_save_best.pkl'), 'rb') as f:
         dtc = pickle.load(f)
     dtc_y_pred = dtc.predict(X_ext)
     preds = (mlb.inverse_transform(dtc_y_pred))
@@ -2806,7 +2807,7 @@ def predictLabels(midpath=None, verbose=True, printform=False, printresults=True
             inarr.append(all_predictions.pop())
         lstmpredictions.append(inarr)
 
-    with open('dcntree_phrase_model_save_best.pkl', 'rb') as f:
+    with open(os.path.join(WEIGHT_DIR, 'dcntree_phrase_model_save_best.pkl'), 'rb') as f:
         dtc = pickle.load(f)
     dtc_y_pred = dtc.predict(X_test[:, :, 0])
     preds = (mlb.inverse_transform(dtc_y_pred))
@@ -2818,7 +2819,7 @@ def predictLabels(midpath=None, verbose=True, printform=False, printresults=True
             inarr.append(all_predictions.pop())
         dtcpredictions.append(inarr)
 
-    with open('treegrad_phrase_model_save_best.pkl', 'rb') as f:
+    with open(os.path.join(WEIGHT_DIR, 'treegrad_phrase_model_save_best.pkl'), 'rb') as f:
         model = pickle.load(f)
     preds = model.predict(X_test[:, :, 0])
     all_predictions = label_encoder.inverse_transform(preds).tolist()
