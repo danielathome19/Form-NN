@@ -2,7 +2,7 @@
 Form-NN is a  trained to .
 To find out more, check out the provided research paper:
   * "" (arXiv:) 
-  * Also contained in the "PaperAndPresentation" folder is a handout note, the research paper, and presentation of the research.
+  * Also contained in the "PaperAndPresentation" folder is the thesis paper, conference paper, and presentation of the research.
 
 # Usage
 For data used in my experiments:
