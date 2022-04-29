@@ -4,6 +4,7 @@ Form-NN is a deep learning system (comprised of hybrid Neural Network-Decision T
 To find out more, check out the provided research paper:
   * "Deep Learning for Musical Form: Recognition and Analysis" (DOI: coming soon) 
   * Also contained in the "PaperAndPresentation" folder is the thesis paper, conference paper, and presentation of the research.
+  * The thesis defense can be watched at https://youtu.be/2ZM5jz5gows.
 
 # Usage
 See:
