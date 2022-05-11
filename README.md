@@ -13,7 +13,7 @@ See:
 
 For data used in my experiments:
   * All datasets can be found in **Data/MIDI** and **Labels** (with example training data stored in **Images**), the PDF dataset of analyses is available upon request.
-  * My most recent pre-trained weights can be found in **Weights/**.
+  * My most recent pre-trained weights can be found in **Weights**.
 
 **NOTE:** these folders should be placed in the **same** folder as "main.py". For folder existing conflicts, simply merge the directories.
 
