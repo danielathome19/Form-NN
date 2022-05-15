@@ -110,7 +110,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # region Directories
 MASTER_DIR = 'D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis/'
-MASTER_INPUT_DIR = 'F:/Master Thesis Input/'
+MASTER_INPUT_DIR = 'D:/Master Thesis Input/'
 MASTER_LABELPATH = os.path.join(MASTER_INPUT_DIR, 'Labels/')
 WEIGHT_DIR = os.path.join(MASTER_DIR, 'Weights/')
 
