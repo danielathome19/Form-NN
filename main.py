@@ -716,7 +716,7 @@ def old_trainFormModel():
     steps_per_epoch = len(list(mls_train)) // batch_size
     steps_per_valid = len(list(mls_val)) // batch_size
     label_encoder = LabelEncoder()
-    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
+    label_encoder.classes_ = np.load(os.path.join(WEIGHT_DIR, 'form_classes.npy'))
 
     if mls_train.getNumClasses() != mls_val.getNumClasses() or mls_train.getNumClasses() != mls_test.getNumClasses():
         print(f"Train and validation or testing datasets have differing numbers of classes: "

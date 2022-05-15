@@ -23,6 +23,7 @@ import soundfile as sf
 import seaborn as sns
 
 MASTER_DIR = 'D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis/'
+WEIGHT_DIR = os.path.join(MASTER_DIR, 'Weights/')
 
 # Output filepath for training images and labels
 DEFAULT_FILEPATH = os.path.join(MASTER_DIR, 'Images/Train/')
@@ -782,7 +783,7 @@ def ReadLabelSecondsPhrasesFromFolder(lblpath=DEFAULT_LABELPATH, stop=-1, valid_
     # Convert Forms to One Hot encoding
     values = np.array(forms)  # print(values)
     label_encoder = LabelEncoder()
-    label_encoder.classes_ = np.load(os.path.join(MASTER_DIR, 'form_classes.npy'))
+    label_encoder.classes_ = np.load(os.path.join(WEIGHT_DIR, 'form_classes.npy'))
     integer_encoded = label_encoder.transform(values)  # print(integer_encoded)
     onehot_encoder = OneHotEncoder(sparse=False)
     integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
