@@ -41,7 +41,7 @@ Please use the issue tracker for the following purpose:
   * To suggest new features or structures or applications.
   
 # Citation
-If you use this code for your research, please cite this project as either the thesis (Deep Learning for Musical Form: Recognition and Analysis):
+If you use this code for your research, please cite this project as either the *thesis* (**Deep Learning for Musical Form: Recognition and Analysis**):
 ```
 @software{Szelogowski_Form-NN_2022,
  author = {Szelogowski, Daniel},
@@ -54,11 +54,11 @@ If you use this code for your research, please cite this project as either the t
  year = {2022}
 }
 ```
-or the conference paper (A Novel Dataset and Deep Learning Benchmark for Classical Music Form Recognition and Analysis):
+or the *conference paper* (**A Novel Dataset and Deep Learning Benchmark for Classical Music Form Recognition and Analysis**):
 ```
 TBA
 ```
-or the dataset (Standardized Musical Form and Structure Analysis (SMFSA) Dataset):
+or the *dataset* (**Standardized Musical Form and Structure Analysis (SMFSA) Dataset**):
 ```
 @misc{Szelogowski_SMFSA-Dataset-And-Form-NN_2022,
  author = {Szelogowski, Daniel},
