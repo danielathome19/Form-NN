@@ -40,6 +40,9 @@ Please use the issue tracker for the following purpose:
   * To suggest any improvements in existing features.
   * To suggest new features or structures or applications.
   
+# License
+The code is licensed under CC0 License 1.0.
+
 # Citation
 If you use this code for your research, please cite this project as either the *thesis* (**Deep Learning for Musical Form: Recognition and Analysis**):
 ```
