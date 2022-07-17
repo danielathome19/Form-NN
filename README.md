@@ -1,5 +1,5 @@
 # About
-Form-NN is a deep learning system (comprised of hybrid Neural Network-Decision Tree architectures, TreeGrad and Bi-LSTM-Tree) trained to perform both form and part/phrase analysis of classical music. The system also provides a new dataset, the **Standardized Musical Form and Structure Analysis (SMFSA) Dataset**, that provides the form classification and timestamp-based analysis for 200 unique pieces of classical music.
+Form-NN is a deep learning system (comprised of hybrid Neural Network-Decision Tree architectures, TreeGrad and Bi-LSTM-Tree) trained to perform both form and part/phrase analysis of classical music. The system also provides a new dataset, the **Standardized Musical Form and Structure Analysis (SMFSA) Database**, that provides the form classification and timestamp-based analysis for 200 unique pieces of classical music.
 
 To find out more, check out the provided research paper:
   * **Master Thesis**: "Deep Learning for Musical Form: Recognition and Analysis" (DOI: [10.13140/RG.2.2.33554.12481](http://doi.org/10.13140/RG.2.2.33554.12481)) 
@@ -58,13 +58,13 @@ or the *conference paper* (**A Novel Dataset and Deep Learning Benchmark for Cla
 ```
 TBA
 ```
-or the *dataset* (**Standardized Musical Form and Structure Analysis (SMFSA) Dataset**):
+or the *dataset* (**Standardized Musical Form and Structure Analysis (SMFSA) Database**):
 ```
 @misc{Szelogowski_SMFSA-Dataset-And-Form-NN_2022,
  author = {Szelogowski, Daniel},
  doi = {10.13140/RG.2.2.33554.12481},
  month = {4},
- title = {{SMFSA-Dataset-And-Form-NN}},
+ title = {{SMFSA-Database-And-Form-NN}},
  license = {CC0-1.0},
  url = {https://github.com/danielathome19/Form-NN},
  year = {2022}
