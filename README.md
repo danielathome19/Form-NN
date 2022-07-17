@@ -48,6 +48,7 @@ If you use this code for your research, please cite this project as either the t
  doi = {10.13140/RG.2.2.33554.12481},
  month = {4},
  title = {{Form-NN}},
+ license = {CC0-1.0},
  url = {https://github.com/danielathome19/Form-NN},
  version = {1.0.0},
  year = {2022}
@@ -64,6 +65,7 @@ or the dataset (Standardized Musical Form and Structure Analysis (SMFSA) Dataset
  doi = {10.13140/RG.2.2.33554.12481},
  month = {4},
  title = {{SMFSA-Dataset-And-Form-NN}},
+ license = {CC0-1.0},
  url = {https://github.com/danielathome19/Form-NN},
  year = {2022}
 }
