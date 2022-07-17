@@ -38,3 +38,17 @@ Please use the issue tracker for the following purpose:
   * To raise a bug request; do include specific details and label it appropriately.
   * To suggest any improvements in existing features.
   * To suggest new features or structures or applications.
+  
+# Citation
+If you use this code for your research, please cite this project:
+```
+@software{Szelogowski_Form-NN_2022,
+ author = {Szelogowski, Daniel},
+ doi = {10.13140/RG.2.2.33554.12481},
+ month = {4},
+ title = {{Form-NN}},
+ url = {https://github.com/danielathome19/Form-NN},
+ version = {1.0.0},
+ year = {2022}
+}
+```
