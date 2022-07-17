@@ -42,6 +42,7 @@ Please use the issue tracker for the following purpose:
   
 # License
 The code is licensed under CC0 License 1.0.
+The database was compiled from free and open source sources with respect to the original file creators. This work is purely for educational and research purposes, and no copyright is claimed on any files contained within the database.
 
 # Citation
 If you use this code for your research, please cite this project as either the *thesis* (**Deep Learning for Musical Form: Recognition and Analysis**):
