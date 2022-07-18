@@ -2014,7 +2014,7 @@ def trainFormModel():
     d = [pd.DataFrame(df[col].astype(str).apply(literal_eval).values.tolist()) for col in df.columns]
     df = pd.concat(d, axis=1).fillna(0)
     df = pd.concat([pd.concat([names, pd.concat([nonlist, df], axis=1)], axis=1), y], axis=1)  # print(df)
-    train, test = train_test_split(df, test_size=0.169, random_state=0, stratify=df['formtype'])  # test_s=.169 gave 50%
+    train, test = train_test_split(df, test_size=0.15, random_state=0, stratify=df['formtype'])  # test_s=.169 gave 50%
     # df.to_csv(os.path.join(MASTER_DIR, 'full_modified_dataset.csv'))
 
     X_train = train.iloc[:, 3:-1]
