@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Szelogowski"
+  given-names: "Daniel"
+  orcid: "https://orcid.org/0000-0002-0350-5771"
+title: "SMFSA-Dataset-And-Form-NN"
+type: dataset
+version: 1.0.0
+doi: 10.13140/RG.2.2.33554.12481
+date-released: 2022-04-29
+url: "https://github.com/danielathome19/Form-NN"
+preferred-citation:
+  authors:
+  - family-names: "Szelogowski"
+    given-names: "Daniel"
+    orcid: "https://orcid.org/0000-0002-0350-5771"
+  title: "Form-NN"
+  type: software
+  version: 1.0.0
+  doi: 10.13140/RG.2.2.33554.12481
+  date-released: 2022-04-29
+  license: CC0-1.0
+  url: "https://github.com/danielathome19/Form-NN"

@@ -1,8 +1,9 @@
 # About
-Form-NN is a deep learning system (comprised of hybrid Neural Network-Decision Tree architectures, TreeGrad and Bi-LSTM-Tree) trained to perform both form and part/phrase analysis of classical music. The system also provides a new dataset that provides the form classification and timestamp-based analysis for 200 unique pieces of classical music.
+Form-NN is a deep learning system (comprised of hybrid Neural Network-Decision Tree architectures, TreeGrad and Bi-LSTM-Tree) trained to perform both form and part/phrase analysis of classical music. The system also provides a new dataset, the **Standardized Musical Form and Structure Analysis (SMFSA) Database**, that provides the form classification and timestamp-based analysis for 200 unique pieces of classical music.
 
 To find out more, check out the provided research paper:
-  * "Deep Learning for Musical Form: Recognition and Analysis" (DOI: coming soon) 
+  * **Master Thesis**: "Deep Learning for Musical Form: Recognition and Analysis" (DOI: [10.13140/RG.2.2.33554.12481](http://doi.org/10.13140/RG.2.2.33554.12481)) 
+  * **Conference Paper**: "A Novel Dataset and Deep Learning Benchmark for Classical Music Form Recognition and Analysis" (DOI: [TBD](#))
   * Also contained in the ["PaperAndPresentation"](https://github.com/danielathome19/Form-NN/tree/master/PaperAndPresentation) folder is the thesis paper, conference paper, and presentation of the research.
   * The thesis defense can be watched at https://youtu.be/2ZM5jz5gows.
 
@@ -38,3 +39,39 @@ Please use the issue tracker for the following purpose:
   * To raise a bug request; do include specific details and label it appropriately.
   * To suggest any improvements in existing features.
   * To suggest new features or structures or applications.
+  
+# License
+The code is licensed under CC0 License 1.0.
+
+The database was compiled from free and open source sources with respect to the original file creators and sequencers. This work is purely for educational and research purposes, and no copyright is claimed on any files contained within the database.
+
+# Citation
+If you use this code for your research, please cite this project as either the *thesis* (**Deep Learning for Musical Form: Recognition and Analysis**):
+```
+@software{Szelogowski_Form-NN_2022,
+ author = {Szelogowski, Daniel},
+ doi = {10.13140/RG.2.2.33554.12481},
+ month = {Apr},
+ title = {{Form-NN}},
+ license = {CC0-1.0},
+ url = {https://github.com/danielathome19/Form-NN},
+ version = {1.0.0},
+ year = {2022}
+}
+```
+or the *conference paper* (**A Novel Dataset and Deep Learning Benchmark for Classical Music Form Recognition and Analysis**):
+```
+TBA
+```
+or the *dataset* (**Standardized Musical Form and Structure Analysis (SMFSA) Database**):
+```
+@misc{Szelogowski_SMFSA-Dataset-And-Form-NN_2022,
+ author = {Szelogowski, Daniel},
+ doi = {10.13140/RG.2.2.33554.12481},
+ month = {Apr},
+ title = {{SMFSA-Database-And-Form-NN}},
+ license = {CC0-1.0},
+ url = {https://github.com/danielathome19/Form-NN},
+ year = {2022}
+}
+```
