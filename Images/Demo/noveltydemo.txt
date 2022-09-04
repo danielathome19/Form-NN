@@ -1,0 +1,42 @@
+C:\Users\Dan\AppData\Local\Programs\Python\Python39\python.exe C:\Users\Dan\AppData\Local\JetBrains\Toolbox\apps\PyCharm-P\ch-0\202.7660.27\plugins\python\helpers\pydev\pydevconsole.py --mode=client --port=55329
+import sys; print('Python %s on %s' % (sys.version, sys.platform))
+sys.path.extend(['D:\\Google Drive\\Resources\\Dev Stuff\\Python\\Machine Learning', 'D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning'])
+Python 3.9.0 (tags/v3.9.0:9cf6752, Oct  5 2020, 15:34:40) [MSC v.1927 64 bit (AMD64)]
+Type 'copyright', 'credits' or 'license' for more information
+IPython 7.19.0 -- An enhanced Interactive Python. Type '?' for help.
+PyDev console: using IPython 7.19.0
+Python 3.9.0 (tags/v3.9.0:9cf6752, Oct  5 2020, 15:34:40) [MSC v.1927 64 bit (AMD64)] on win32
+runfile('D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis/main.py', wdir='D:/Google Drive/Resources/Dev Stuff/Python/Machine Learning/Master Thesis')
+2021-08-11 23:36:19.527378: I tensorflow/stream_executor/platform/default/dso_loader.cc:53] Successfully opened dynamic library cudart64_110.dll
+Hello world!
+Working on file 1
+Chroma dimensions are: [chroma vectors, N']
+Chroma dimensions are: [ 12 , 2649 ]
+X_hat dimensions are: [chroma vectors * m (in samples), N'] = [ 12 * 36 , N']
+X_hat dimensions are: [ 432 , 2649 ]
+Event: 0:00:00			Ground Truth: 0:00:00			Difference:  0.000000		G.T. Labels: ['Silence']
+Event: 0:00:13.235374		Ground Truth: 0:00:01.150000		Difference: -12.085374		G.T. Labels: ['Exposition', 'pt', 'FugueExposition']
+Event: 0:00:28.560544		Ground Truth: 0:00:23.995000		Difference: -4.565544		G.T. Labels: ['Episode1']
+Event: 0:00:40.124082		Ground Truth: 0:00:29.945000		Difference: -10.179082		G.T. Labels: ['MiddleEntry1']
+Event: 0:01:00.186122		Ground Truth: 0:00:37.545000		Difference: -22.641122		G.T. Labels: ['Episode2']
+Event: 0:01:18.715646		Ground Truth: 0:00:48.645000		Difference: -30.070646		G.T. Labels: ['MiddleEntry2']
+Event: 0:01:42.678639		Ground Truth: 0:00:56.495000		Difference: -46.183639		G.T. Labels: ['Episode3', 'transition']
+Event: 0:01:54.102857		Ground Truth: 0:01:40.195000		Difference: -13.907857		G.T. Labels: ['MiddleEntry3', 'st']
+Event: 0:02:14.443537		Ground Truth: 0:01:59.161000		Difference: -15.282537		G.T. Labels: ['Episode4', 'ct']
+Event: 0:02:27.678912		Ground Truth: 0:02:22.011000		Difference: -5.667912		G.T. Labels: ['Development', 'sec1']
+Event: 0:02:44.397279		Ground Truth: 0:02:52.811000		Difference:  8.413721		G.T. Labels: ['sec2']
+Event: 0:02:56.100136		Ground Truth: 0:03:19.611000		Difference:  23.510864		G.T. Labels: ['sec3']
+Event: 0:03:09.196190		Ground Truth: 0:03:32.411000		Difference:  23.214810		G.T. Labels: ['retransition', 'part1']
+Event: 0:03:22.292245		Ground Truth: 0:03:51.761000		Difference:  29.468755		G.T. Labels: ['retransition', 'part2']
+Event: 0:03:36.642177		Ground Truth: 0:04:10.761000		Difference:  34.118823		G.T. Labels: ['Recapitulation', 'pt', "FugueExposition'"]
+Event: 0:03:59.072653		Ground Truth: 0:04:24.211000		Difference:  25.138347		G.T. Labels: ['Episode1']
+Event: 0:04:15.233741		Ground Truth: 0:04:30.761000		Difference:  15.527259		G.T. Labels: ['MiddleEntry1']
+Event: 0:04:31.255510		Ground Truth: 0:04:38.761000		Difference:  7.505490		G.T. Labels: ['Episode2']
+Event: 0:04:41.983129		Ground Truth: 0:04:47.761000		Difference:  5.777871		G.T. Labels: ['MiddleEntry2', 'part1']
+Event: 0:05:01.209252		Ground Truth: 0:04:59.911000		Difference: -1.298252		G.T. Labels: ['MiddleEntry2', 'part2']
+Event: 0:05:19.878095		Ground Truth: 0:05:06.511000		Difference: -13.367095		G.T. Labels: ['Episode3', 'transition', 'domProlongation']
+Event: 0:05:34.228027		Ground Truth: 0:05:31.761000		Difference: -2.467027		G.T. Labels: ['CODA', 'FinalEntry']
+Event: 0:05:48.438639		Ground Truth: 0:05:43.861000		Difference: -4.577639		G.T. Labels: ['TrueCODA']
+Event: 0:06:08.918639		Ground Truth: 0:06:08.001000		Difference: -0.917639		G.T. Labels: ['End']
+Average (absolute) time difference: ±14.828637755102045
+Done!
