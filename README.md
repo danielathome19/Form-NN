@@ -11,6 +11,7 @@ To find out more, check out the provided research paper:
 See:
   * http://danielszelogowski.com/thesis/demo.php for a live demo of the full prediction system.
   * https://github.com/danielathome19/Form-NN/releases for a downloadable local demo of the prediction system.
+  https://ismir2022program.ismir.net/poster_152.html for the conference paper, including the poster and presentation.
 
 For data used in my experiments:
   * All datasets can be found in **Data/MIDI** and **Labels** (with example training data stored in **Images**), the PDF dataset of analyses is available upon request.
