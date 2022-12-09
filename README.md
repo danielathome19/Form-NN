@@ -6,12 +6,13 @@ To find out more, check out the provided research paper:
   * **Conference Paper**: "A Novel Dataset and Deep Learning Benchmark for Classical Music Form Recognition and Analysis" (DOI: [TBD](#))
   * Also contained in the ["PaperAndPresentation"](https://github.com/danielathome19/Form-NN/tree/master/PaperAndPresentation) folder is the thesis paper, conference paper (and supplement), and presentation of the research.
   * The thesis defense can be watched at https://youtu.be/2ZM5jz5gows.
+  * The conference paper presentation can be watched at https://youtu.be/zwqqrrwFHjg.
 
 # Usage
 See:
   * http://danielszelogowski.com/thesis/demo.php for a live demo of the full prediction system.
   * https://github.com/danielathome19/Form-NN/releases for a downloadable local demo of the prediction system.
-  https://ismir2022program.ismir.net/poster_152.html for the conference paper, including the poster and presentation.
+  * https://ismir2022program.ismir.net/poster_152.html for the conference paper, including the poster and presentation.
 
 For data used in my experiments:
   * All datasets can be found in **Data/MIDI** and **Labels** (with example training data stored in **Images**), the PDF dataset of analyses is available upon request.
