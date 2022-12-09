@@ -3,7 +3,7 @@ Form-NN is a deep learning system (comprised of hybrid Neural Network-Decision T
 
 To find out more, check out the provided research paper:
   * **Master Thesis**: "Deep Learning for Musical Form: Recognition and Analysis" (DOI: [10.13140/RG.2.2.33554.12481](http://doi.org/10.13140/RG.2.2.33554.12481)) 
-  * **Conference Paper**: "A Novel Dataset and Deep Learning Benchmark for Classical Music Form Recognition and Analysis" (DOI: [TBD](#))
+  * **Conference Paper**: "A Novel Dataset and Deep Learning Benchmark for Classical Music Form Recognition and Analysis" (DOI: [10.5281/zenodo.7416690]([#](https://doi.org/10.5281/zenodo.7416690)))
   * Also contained in the ["PaperAndPresentation"](https://github.com/danielathome19/Form-NN/tree/master/PaperAndPresentation) folder is the thesis paper, conference paper (and supplement), and presentation of the research.
   * The thesis defense can be watched at https://youtu.be/2ZM5jz5gows.
   * The conference paper presentation can be watched at https://youtu.be/zwqqrrwFHjg.
@@ -64,6 +64,20 @@ If you use this code for your research, please cite this project as either the *
 or the *conference paper* (**A Novel Dataset and Deep Learning Benchmark for Classical Music Form Recognition and Analysis**):
 ```
 TBA - ISMIR: Proc. of the 23rd Int. Society for Music Information Retrieval Conf., Bengaluru, India, 2022. December 4-8th.
+@inproceedings{Szelogowski_Dataset-Deep-Learning-Musical-Form, 
+ title = {A Novel Dataset and Deep Learning Benchmark for Classical Music Form Recognition and Analysis}, 
+ doi = {10.5281/zenodo.7416690},
+ author={Szelogowski, Daniel and Mukherjee, Lopamudra and Whitcomb, Benjamin}, 
+ year={2022}, 
+ month={Dec}, 
+ day={4-8}
+ pages={900–907},
+ booktitle = {{Proceedings of the 23rd International Society for Music Information Retrieval Conference}},
+ publisher = {ISMIR},
+ address = {Bengaluru, India},
+ venue = {Bengaluru, India},
+ url = {https://doi.org/10.5281/zenodo.7416690}
+}
 ```
 or the *dataset* (**Standardized Musical Form and Structure Analysis (SMFSA) Database**):
 ```
