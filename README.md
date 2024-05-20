@@ -84,7 +84,7 @@ or the *dataset* (**Standardized Musical Form and Structure Analysis (SMFSA) Dat
  author = {Szelogowski, Daniel},
  doi = {10.13140/RG.2.2.33554.12481},
  month = {Apr},
- title = {{SMFSA-Dataset-And-Form-NN}},
+ title = {{SMFSA-Database-And-Form-NN}},
  license = {CC0-1.0},
  url = {https://github.com/danielathome19/Form-NN},
  year = {2022}
