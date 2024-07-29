@@ -49,7 +49,7 @@ The database was compiled from free and open sources with respect to the origina
 
 # Citation
 If you use this code for your research, please cite this project as either the *thesis* (**Deep Learning for Musical Form: Recognition and Analysis**):
-```
+```bibtex
 @software{Szelogowski_Form-NN_2022,
  author = {Szelogowski, Daniel},
  doi = {10.13140/RG.2.2.33554.12481},
@@ -62,7 +62,7 @@ If you use this code for your research, please cite this project as either the *
 }
 ```
 or the *conference paper* (**A Novel Dataset and Deep Learning Benchmark for Classical Music Form Recognition and Analysis**):
-```
+```bibtex
 @inproceedings{Szelogowski_Dataset-Deep-Learning-Musical-Form, 
  title = {A Novel Dataset and Deep Learning Benchmark for Classical Music Form Recognition and Analysis}, 
  doi = {10.5281/zenodo.7416689},
@@ -79,7 +79,7 @@ or the *conference paper* (**A Novel Dataset and Deep Learning Benchmark for Cla
 }
 ```
 or the *dataset* (**Standardized Musical Form and Structure Analysis (SMFSA) Database**):
-```
+```bibtex
 @misc{Szelogowski_SMFSA-Dataset-And-Form-NN_2022,
  author = {Szelogowski, Daniel},
  doi = {10.13140/RG.2.2.33554.12481},
